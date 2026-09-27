@@ -1,12 +1,10 @@
 "use client";
 
 import { useEffect } from "react";
-import { useShell, hydratePrefs, type WorkspaceId } from "@/lib/store";
-import { findNode } from "@/vfs/vfs";
+import { useShell, hydratePrefs } from "@/lib/store";
+import { findNode, HOME } from "@/vfs/vfs";
 import { SystemRoot, useAmbience } from "@/system/System";
 import { sound } from "@/audio/engine";
-
-const NUMS: WorkspaceId[] = ["home", "projects", "research", "git", "profile"];
 
 function ensureApp() {
   const s = useShell.getState();
@@ -18,6 +16,19 @@ function ensureApp() {
     }
     s.setPhase("app");
   }
+}
+
+function focusTerminal() {
+  setTimeout(() => {
+    try {
+      const boxes = [...document.querySelectorAll('[data-testid^="xterm-"]')];
+      const visible = boxes.find((b) => (b as HTMLElement).offsetParent !== null);
+      const area = (visible ?? boxes[0])?.querySelector(".xterm-helper-textarea") as HTMLElement | null;
+      area?.focus?.();
+    } catch {
+      /* noop */
+    }
+  }, 80);
 }
 
 export default function Page() {
@@ -34,11 +45,10 @@ export default function Page() {
 
   useEffect(() => {
     hydratePrefs();
-    // deep links: ?open=~/projects/ice/README.md or #/projects/ice
+    // deep links: ?open=~/projects/ice/README.md
     try {
       const params = new URLSearchParams(window.location.search);
-      const hash = window.location.hash.replace(/^#\/?/, "");
-      const target = params.get("open") ?? (hash ? `~/home/deepnar/${hash}`.replace("~/home", "~") : null);
+      const target = params.get("open");
       if (target) {
         const path = target.startsWith("~") ? target.replace(/^~/, "/home/deepnar") : target;
         const node = findNode(path) ?? findNode(`/home/deepnar/${path.replace(/^\//, "")}`);
@@ -61,46 +71,80 @@ export default function Page() {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
       const typing = t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable;
+      const inTerm = (t as HTMLElement).classList?.contains("xterm-helper-textarea");
       const s = useShell.getState();
+
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); ensureApp(); s.toggle("paletteOpen"); return; }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "p") { e.preventDefault(); ensureApp(); s.toggle("paletteOpen"); return; }
-      if (e.key === "`" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); ensureApp(); s.toggle("terminalOpen"); return; }
+      if (e.key === "`" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        ensureApp();
+        s.setDesktopWs(1);
+        s.openDock("term");
+        s.setMode("TERMINAL");
+        focusTerminal();
+        return;
+      }
+      // close active buffer / dock tab (browser may still claim this combo)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "w") {
+        const st = useShell.getState();
+        if (st.activeBuffer || (st.activeDock && !typing)) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (st.activeBuffer) { sound.fileClose(); st.closeBuffer(st.activeBuffer); }
+          else if (st.activeDock) { sound.fileClose(); st.closeDock(st.activeDock); }
+          return;
+        }
+      }
+      // real desktop spaces — never hijack plain number typing
+      if (e.altKey && ["1", "2", "3"].includes(e.key)) {
+        e.preventDefault();
+        s.setDesktopWs(Number(e.key) as 1 | 2 | 3);
+        sound.tick(1);
+        return;
+      }
       if (e.key === "Escape") {
+        if (inTerm) {
+          (t as HTMLElement).blur();
+          s.setMode("BROWSE");
+          return;
+        }
         if (s.paletteOpen) s.toggle("paletteOpen");
         else if (s.contactOpen) s.toggle("contactOpen");
         else if (s.settingsOpen) s.toggle("settingsOpen");
         else if (s.helpOpen) s.toggle("helpOpen");
-        else if (s.overviewOpen) s.toggle("overviewOpen");
-        else if (s.aiOpen && window.matchMedia("(max-width: 1023px)").matches) s.toggle("aiOpen");
         return;
       }
-      if (typing || s.phase === "boot" || s.phase === "greeter") return;
-      if (s.paletteOpen || s.overviewOpen || s.contactOpen || s.settingsOpen || s.helpOpen) return;
-      if (/^[1-5]$/.test(e.key)) {
-        ensureApp();
-        const w = NUMS[Number(e.key) - 1];
-        sound.tick(1);
-        useShell.getState().go(w);
-        return;
-      }
+      if (typing || inTerm || s.phase === "boot" || s.phase === "greeter") return;
+      if (s.paletteOpen || s.contactOpen || s.settingsOpen || s.helpOpen) return;
       if (e.key === "?") { ensureApp(); s.toggle("helpOpen"); return; }
-      if (e.key === "/") { e.preventDefault(); ensureApp(); if (!s.aiOpen) s.toggle("aiOpen"); return; }
+      if (e.key === "/") {
+        e.preventDefault();
+        ensureApp();
+        s.setDesktopWs(1);
+        s.openDock("agent");
+        s.setMode("AGENT");
+        return;
+      }
       if (e.key === ":") {
         e.preventDefault();
         ensureApp();
-        if (!s.terminalOpen) s.toggle("terminalOpen");
-        setTimeout(() => document.querySelector<HTMLInputElement>('[aria-label="terminal input"]')?.focus(), 60);
+        s.setDesktopWs(1);
+        s.openDock("term");
+        s.setMode("TERMINAL");
+        focusTerminal();
         return;
       }
       // home quick actions (single keys, dashboard only)
-      if (s.phase === "app" && s.workspace === "home" && !typing) {
+      if (s.phase === "app" && s.desktopWs === 1 && s.cwd === HOME && !s.activeBuffer && !typing) {
         const map: Record<string, () => void> = {
           f: () => s.toggle("paletteOpen"),
-          p: () => s.go("projects"),
-          r: () => s.go("research"),
-          o: () => s.go("git"),
-          v: () => s.openFile("/home/deepnar/resume.pdf", "pdf"),
-          a: () => s.go("profile"),
+          p: () => s.navTo(`${HOME}/projects`),
+          r: () => s.navTo(`${HOME}/research/lsrep-ice`),
+          o: () => s.navTo(`${HOME}/oss`),
+          v: () => s.openFile(`${HOME}/resume.pdf`, "pdf"),
+          a: () => s.navTo(`${HOME}/about`),
+          c: () => s.toggle("contactOpen"),
         };
         if (map[e.key]) {
           sound.select();

@@ -1,8 +1,9 @@
 "use client";
 
-// Telescope-style finder: files · projects · research · PRs · commands · actions.
+// Telescope-style finder: files · projects · PRs · commands/actions.
+// No workspace actions — sections are locations, not workspaces.
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useShell, type WorkspaceId } from "@/lib/store";
+import { useShell } from "@/lib/store";
 import { HOME, flatten, shortPath, type VNode } from "@/vfs/vfs";
 import { sound } from "@/audio/engine";
 
@@ -25,8 +26,30 @@ function fuzzy(q: string, s: string): boolean {
   return i === q.length;
 }
 
+const catFor = (n: VNode): string => {
+  if (n.path.includes("/oss/")) return "oss";
+  if (n.path.includes("/research/")) return "research";
+  if (n.path.includes("/collaborations/")) return "team";
+  if (n.path.includes("/practice/")) return "practice";
+  if (n.path.includes("/projects/")) return "project";
+  return n.kind === "dir" ? "dir" : "file";
+};
+
+function downloadResume() {
+  try {
+    const a = document.createElement("a");
+    a.href = "/resume/Deepesh_Sonar_CV.pdf";
+    a.download = "Deepesh_Sonar_CV.pdf";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } catch {
+    /* noop */
+  }
+}
+
 export function Palette() {
-  const { paletteOpen, toggle, go, openFile, notify, setTheme, theme } = useShell();
+  const { paletteOpen, toggle, navTo, openFile, setTheme, theme } = useShell();
   const [q, setQ] = useState("");
   const [idx, setIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -49,26 +72,23 @@ export function Palette() {
       .map((n) => ({
         label: n.title ?? n.name,
         path: shortPath(n.path),
-        cat: n.path.includes("/projects/") ? "project" : n.path.includes("/research/") ? "research" : n.path.includes("/oss/") ? "oss" : n.kind === "dir" ? "dir" : "file",
+        cat: catFor(n),
         node: n,
       }));
     const cmds: Item[] = (
       [
-        ["toggle terminal", () => s.toggle("terminalOpen")],
-        ["ask about current context", () => { if (!s.aiOpen) s.toggle("aiOpen"); }],
+        ["new terminal tab", () => { s.openDock("term"); s.setMode("TERMINAL"); }],
+        ["open agent", () => s.openDock("agent")],
         ["contact", () => s.toggle("contactOpen")],
         ["settings", () => s.toggle("settingsOpen")],
         ["help / keybindings", () => s.toggle("helpOpen")],
-        ["overview", () => s.toggle("overviewOpen")],
         ["resume (open pdf)", () => s.openFile(`${HOME}/resume.pdf`, "pdf")],
-        ["resume (download)", () => s.notify("resume downloaded")],
-        [`theme → ${theme === "dark" ? "light" : "dark"}`, () => { s.setTheme(theme === "dark" ? "light" : "dark"); sound.relay(); }],
+        ["resume (download)", () => { downloadResume(); s.notify("resume downloaded"); sound.download(); }],
+        [`theme → ${theme === "dark" ? "light" : "dark"}`, () => { s.setTheme(theme === "dark" ? "light" : "dark"); sound.toggle(); }],
         ["pet on/off", () => s.setPet(!s.petOn)],
-        ["workspace: home", () => s.go("home" as WorkspaceId)],
-        ["workspace: projects", () => s.go("projects" as WorkspaceId)],
-        ["workspace: research", () => s.go("research" as WorkspaceId)],
-        ["workspace: oss", () => s.go("git" as WorkspaceId)],
-        ["workspace: profile", () => s.go("profile" as WorkspaceId)],
+        ["desktop: workstation", () => { s.setDesktopWs(1); s.setPhase("app"); }],
+        ["desktop: orbit", () => { s.setDesktopWs(2); s.setPhase("app"); }],
+        ["desktop: signal", () => { s.setDesktopWs(3); s.setPhase("app"); }],
       ] as [string, () => void][]
     ).map(([label, run]) => ({ label, path: "action", cat: "command", run }));
     const all = [...cmds, ...files];
@@ -86,7 +106,10 @@ export function Palette() {
     sound.select();
     toggle("paletteOpen");
     if (it.run) it.run();
-    else if (it.node) openFile(it.node.path, it.node.kind);
+    else if (it.node) {
+      if (it.node.kind === "dir") navTo(it.node.path);
+      else openFile(it.node.path, it.node.kind);
+    }
   };
 
   return (

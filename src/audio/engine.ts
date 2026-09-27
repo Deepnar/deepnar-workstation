@@ -1,5 +1,5 @@
-// Procedural UI audio. Web Audio only, no assets. OFF by default; every cue
-// has a visual twin. Fail silent everywhere.
+// Procedural UI audio. Web Audio only, no assets. Quiet by design;
+// every cue has a visual twin. Fail silent everywhere.
 import { useShell } from "@/lib/store";
 
 let ctx: AudioContext | null = null;
@@ -25,10 +25,10 @@ function ac(): AudioContext | null {
 }
 
 function vol(): number {
-  return useShell.getState().settings.volume ?? 0.5;
+  return useShell.getState().settings.volume ?? 0.35;
 }
 
-function tone(freq: number, dur: number, type: OscillatorType = "sine", gain = 0.08, when = 0, slideTo?: number, pan = 0) {
+function tone(freq: number, dur: number, type: OscillatorType = "sine", gain = 0.05, when = 0, slideTo?: number) {
   const c = ac();
   if (!c || !master) return;
   try {
@@ -41,15 +41,8 @@ function tone(freq: number, dur: number, type: OscillatorType = "sine", gain = 0
     g.gain.setValueAtTime(0, t0);
     g.gain.linearRampToValueAtTime(gain * vol(), t0 + 0.008);
     g.gain.exponentialRampToValueAtTime(0.0004, t0 + dur);
-    let head: AudioNode = g;
-    if (pan && c.createStereoPanner) {
-      const p = c.createStereoPanner();
-      p.pan.value = Math.max(-0.6, Math.min(0.6, pan));
-      g.connect(p);
-      head = p;
-    }
     o.connect(g);
-    head.connect(master);
+    g.connect(master);
     o.start(t0);
     o.stop(t0 + dur + 0.05);
   } catch {
@@ -57,7 +50,7 @@ function tone(freq: number, dur: number, type: OscillatorType = "sine", gain = 0
   }
 }
 
-function noise(dur: number, cutoff = 1800, gain = 0.05, when = 0) {
+function noise(dur: number, cutoff = 1800, gain = 0.03, when = 0) {
   const c = ac();
   if (!c || !master) return;
   try {
@@ -84,45 +77,57 @@ function noise(dur: number, cutoff = 1800, gain = 0.05, when = 0) {
 }
 
 export const sound = {
-  enter() { tone(196, 0.16, "sine", 0.07); tone(294, 0.2, "sine", 0.05, 0.09); },
-  appOpen() { noise(0.07, 900, 0.09); tone(140, 0.12, "triangle", 0.09, 0.02); },
-  appClose() { tone(140, 0.1, "triangle", 0.07); noise(0.06, 700, 0.06, 0.05); },
-  tick(dir: 1 | -1 = 1) { tone(dir > 0 ? 660 : 520, 0.05, "sine", 0.045, 0, undefined, dir * 0.35); },
-  fileOpen() { noise(0.03, 2400, 0.05); tone(880, 0.05, "sine", 0.04, 0.02); },
-  fileClose() { tone(620, 0.06, "sine", 0.04); },
-  palette() { tone(440, 0.07, "sine", 0.04, 0, 660); },
-  select() { tone(740, 0.05, "sine", 0.05); },
-  success() { tone(980, 0.06, "sine", 0.04); },
-  error() { tone(160, 0.14, "sine", 0.09); },
-  copy() { noise(0.03, 3000, 0.05); tone(1200, 0.05, "sine", 0.035, 0.03); },
-  download() { tone(520, 0.1, "sine", 0.06, 0, 780); },
-  notify() { tone(660, 0.12, "sine", 0.05); tone(880, 0.16, "sine", 0.045, 0.11); },
-  relay() { noise(0.04, 1200, 0.1); tone(220, 0.06, "triangle", 0.06, 0.02); },
-  pet() { tone(1180, 0.07, "sine", 0.03, 0, 1560); },
+  enter() { tone(196, 0.16, "sine", 0.05); tone(294, 0.2, "sine", 0.04, 0.09); },
+  appOpen() { noise(0.07, 900, 0.06); tone(140, 0.12, "triangle", 0.06, 0.02); },
+  appClose() { tone(140, 0.1, "triangle", 0.05); noise(0.06, 700, 0.04, 0.05); },
+  tick(dir: 1 | -1 = 1) { tone(dir > 0 ? 660 : 520, 0.05, "sine", 0.03); },
+  nav() { tone(590, 0.04, "sine", 0.04); },
+  fileOpen() { noise(0.03, 2400, 0.03); tone(880, 0.05, "sine", 0.025, 0.02); },
+  fileClose() { tone(620, 0.06, "sine", 0.025); },
+  palette() { tone(440, 0.07, "sine", 0.03, 0, 660); },
+  select() { tone(740, 0.05, "sine", 0.03); },
+  success() { tone(980, 0.06, "sine", 0.03); },
+  error() { tone(160, 0.14, "sine", 0.06); },
+  copy() { noise(0.03, 3000, 0.03); tone(1200, 0.05, "sine", 0.025, 0.03); },
+  download() { tone(520, 0.1, "sine", 0.04, 0, 780); },
+  notify() { tone(660, 0.12, "sine", 0.035); tone(880, 0.16, "sine", 0.03, 0.11); },
+  toggle() { tone(440, 0.05, "sine", 0.04); },
+  pet() { tone(1180, 0.07, "sine", 0.025, 0, 1560); },
 };
 
+/** Quiet airy room tone: high-passed noise + faint shimmer. No drone, no bass. */
 export const ambience = {
   start() {
     const c = ac();
     if (!c || !master || ambientNodes) return;
     try {
+      const len = c.sampleRate * 2;
+      const buf = c.createBuffer(1, len, c.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * 0.5;
+      const src = c.createBufferSource();
+      src.buffer = buf;
+      src.loop = true;
+      const hp = c.createBiquadFilter();
+      hp.type = "highpass";
+      hp.frequency.value = 900;
       const g = c.createGain();
-      g.gain.value = 0;
-      g.gain.linearRampToValueAtTime(0.05 * vol(), c.currentTime + 1.2);
-      const o1 = c.createOscillator();
-      o1.type = "sine";
-      o1.frequency.value = 55;
-      const o2 = c.createOscillator();
-      o2.type = "sine";
-      o2.frequency.value = 82.5;
-      const g2 = c.createGain();
-      g2.gain.value = 0.4;
-      o1.connect(g);
-      o2.connect(g2);
-      g2.connect(g);
-      g.connect(master);
-      o1.start();
-      o2.start();
+      g.gain.value = 0.012 * vol();
+      const lfo = c.createOscillator();
+      lfo.frequency.value = 0.07;
+      const lfoG = c.createGain();
+      lfoG.gain.value = 0.006 * vol();
+      lfo.connect(lfoG).connect(g.gain);
+      src.connect(hp).connect(g).connect(master);
+      src.start();
+      lfo.start();
+      const shimmer = c.createOscillator();
+      shimmer.type = "sine";
+      shimmer.frequency.value = 1567;
+      const sg = c.createGain();
+      sg.gain.value = 0.0025 * vol();
+      shimmer.connect(sg).connect(master);
+      shimmer.start();
       let dead = false;
       ambientNodes = {
         stop: () => {
@@ -130,7 +135,7 @@ export const ambience = {
           dead = true;
           try {
             g.gain.linearRampToValueAtTime(0, c.currentTime + 0.4);
-            setTimeout(() => { try { o1.stop(); o2.stop(); } catch { /* noop */ } }, 600);
+            setTimeout(() => { try { src.stop(); lfo.stop(); shimmer.stop(); } catch { /* noop */ } }, 600);
           } catch {
             /* noop */
           }

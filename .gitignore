@@ -14,3 +14,6 @@ next-env.d.ts
 
 # local agent tooling (environment, not source)
 .agents/
+
+# V3 internal audit (do not publish)
+.work/

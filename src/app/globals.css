@@ -23,6 +23,7 @@
   --warm-deep: #ff9364;
   --ok: #a6e3a1;
   --err: #f38ba8;
+  --pet: #7c8aff;
   --sel-bg: #353749;
   --wall-a: #141828;
   --wall-b: #0b0c11;
@@ -51,6 +52,7 @@
   --warm-deep: #93400f;
   --ok: #1e7a34;
   --err: #b42348;
+  --pet: #4653b0;
   --sel-bg: #d3d8f5;
   --wall-a: #e6e8f2;
   --wall-b: #f4f2ec;
@@ -291,6 +293,13 @@ body {
   35% { transform: translateY(-9px) scale(0.94, 1.08); }
   70% { transform: translateY(0) scale(1.06, 0.92); }
   100% { transform: translateY(0) scale(1, 1); }
+}
+.constellation-twinkle {
+  animation: constellation-twinkle 3.2s ease-in-out infinite;
+}
+@keyframes constellation-twinkle {
+  0%, 100% { opacity: 0.85; }
+  50% { opacity: 0.45; }
 }
 html[data-motion="off"] *,
 html[data-motion="off"] *::before,

@@ -19,15 +19,21 @@ const merged = j(`gh search prs --author Deepnar --merged --limit 30 --json titl
 const open = j(`gh search prs --author Deepnar --state open --limit 30 --json title,url,repository`)
   .map((p) => ({ title: p.title, repo: p.repository.nameWithOwner, url: p.url }));
 
-let activityWeeks = [];
+// Real contribution calendar: per-day counts for the last ~year.
+let calendar = { total: 0, weeks: [] };
 try {
-  activityWeeks = j(`gh api graphql -f query='{ viewer { contributionsCollection { contributionCalendar { weeks { contributionDays { contributionCount } } } } } }' --jq '.data.viewer.contributionsCollection.contributionCalendar.weeks[-20:] | map(.contributionDays | map(.contributionCount) | add)'`);
+  const cal = j(`gh api graphql -f query='query { viewer { contributionsCollection { contributionCalendar { totalContributions weeks { contributionDays { date contributionCount } } } } } }' --jq '.data.viewer.contributionsCollection.contributionCalendar'`);
+  calendar = {
+    total: cal.totalContributions,
+    weeks: cal.weeks.map((w) => w.contributionDays.map((d) => ({ date: d.date, count: d.contributionCount }))),
+  };
 } catch {
-  console.log("graphql calendar unavailable — keeping previous activityWeeks");
+  console.log("graphql calendar unavailable — keeping previous calendar");
   try {
-    activityWeeks = JSON.parse(readFileSync(OUT, "utf8")).activityWeeks ?? [];
+    const prev = JSON.parse(readFileSync(OUT, "utf8"));
+    calendar = prev.calendar ?? calendar;
   } catch {
-    activityWeeks = [];
+    /* fresh */
   }
 }
 
@@ -39,7 +45,7 @@ const data = {
   openPRs: open.length,
   merged: merged.slice(0, 12),
   open: open.slice(0, 12),
-  activityWeeks,
+  calendar,
 };
 writeFileSync(OUT, JSON.stringify(data, null, 2));
-console.log(`synced ${data.syncedAt}: ${data.repoCount} repos, ${merged.length} merged, ${open.length} open`);
+console.log(`synced ${data.syncedAt}: ${data.repoCount} repos, ${merged.length} merged, ${open.length} open, ${calendar.total} contributions`);

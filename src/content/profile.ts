@@ -2,7 +2,7 @@
 export const profile = {
   name: "Deepesh Sonar",
   handle: "deepnar",
-  host: "nexus",
+  host: "orien",
   location: "Mumbai, India",
   tagline: "I build systems, then try to break my own claims about them.",
   aboutLong: [
@@ -28,7 +28,6 @@ export const profile = {
     branch: "main",
     editor: "nvim",
     os: "Arch",
-    availability: "open to research / software internships",
   },
   stack: [
     "Python",
@@ -38,7 +37,6 @@ export const profile = {
     "Docker",
     "Linux",
     "Java",
-    "Rust (learning)",
     "OR-Tools",
     "Ollama",
   ],

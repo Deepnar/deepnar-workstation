@@ -40,7 +40,7 @@ export function Contact() {
     ["github", "Deepnar", profile.links.github],
     ["linkedin", "Deepesh Sonar", profile.links.linkedin],
     ["email", "18deepnar@gmail.com", undefined],
-    ["x", "@orion", profile.links.x],
+    ["x", "DeepnarS", profile.links.x],
     ["orcid", "0009-0008-1762-4246", profile.links.orcid],
   ];
   return (
@@ -115,6 +115,23 @@ export function Settings() {
             onChange={(e) => setSettings({ volume: Number(e.target.value) })}
             className="w-32 accent-[var(--accent)]" />
         </div>
+        <div className={row}><span style={{ color: "var(--fg-dim)" }}>companion roams desktop</span>
+          <button
+            onClick={() => { setSettings({ petRoam: !settings.petRoam }); sound.select(); }}
+            className="px-2.5 py-1 border text-[12px]" style={{ borderColor: settings.petRoam ? "var(--accent)" : "var(--border)", color: settings.petRoam ? "var(--accent-soft)" : "var(--muted)" }}>
+            {settings.petRoam ? "on" : "off"}
+          </button>
+        </div>
+        <div className={row}><span style={{ color: "var(--fg-dim)" }}>companion size</span>
+          <div className="flex gap-1">
+            {([0.75, 1, 1.25] as const).map((s) => (
+              <button key={s} onClick={() => { setSettings({ petSize: s }); sound.select(); }}
+                className="px-2.5 py-1 border text-[12px]" style={{ borderColor: settings.petSize === s ? "var(--accent)" : "var(--border)", color: settings.petSize === s ? "var(--accent-soft)" : "var(--muted)" }}>
+                {s === 0.75 ? "s" : s === 1 ? "m" : "l"}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="flex gap-2 mt-3">
           <button onClick={() => { try { localStorage.removeItem("deepnar-seen"); } catch { /* noop */ } notify("boot will replay next visit"); toggle("settingsOpen"); setPhase("boot"); }}
             className="px-3 py-1.5 border text-[12px]" style={{ borderColor: "var(--border)", color: "var(--fg-dim)" }}>replay boot</button>
@@ -126,15 +143,18 @@ export function Settings() {
 }
 
 const KEYS: [string, string][] = [
-  ["1–5", "workspaces"],
+  ["alt+1·2·3", "desktop spaces"],
   ["ctrl+k / ctrl+p", "finder"],
-  ["ctrl+`", "terminal"],
-  ["/", "assistant"],
+  ["ctrl+`", "terminal tab"],
+  ["/", "agent tab"],
   ["?", "this help"],
-  ["esc", "close overlay"],
+  ["esc", "close / unfocus"],
+  ["middle-click", "close tab"],
   ["↑↓ / tab", "terminal history / complete"],
-  ["f p r o v a", "home quick actions"],
-  [":e :bd :bnext", "buffers"],
+  ["ctrl+l · c", "clear terminal"],
+  ["j k h l · enter", "file browser"],
+  ["f p r o v a c", "home quick actions"],
+  [":e · :bd", "open · close buffer"],
 ];
 
 export function Help() {

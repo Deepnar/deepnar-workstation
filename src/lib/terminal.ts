@@ -1,15 +1,23 @@
 // Safe in-browser interpreter. Every fs command runs against the VFS —
-// the same nodes Explorer, finder, buffers and the assistant read.
-import { useShell, type WorkspaceId } from "@/lib/store";
+// the same nodes Explorer, finder, buffers and the agent read.
+// Sessions own their cwd; the component passes it in and stores the result.
+import { useShell } from "@/lib/store";
 import { HOME, ROOT, findNode, listDir, resolvePath, shortPath, searchVfs, type VNode } from "@/vfs/vfs";
 import { answer } from "@/lib/assistant/engine";
 import { sound } from "@/audio/engine";
 import gh from "@/generated/github.json";
+import { projects } from "@/content/projects";
 
 export interface TermLine {
   text: string;
   kind: "cmd" | "out" | "err" | "ok" | "dim";
   cwd?: string;
+}
+
+export interface TermAction {
+  type: "download";
+  url: string;
+  filename: string;
 }
 
 const BOOT_TIME = Date.now();
@@ -21,7 +29,7 @@ const FORTUNES = [
 ];
 
 function projectFromCwd(cwd: string): string | null {
-  const m = cwd.match(/^\/home\/deepnar\/projects\/(?:labs\/|collaborations\/|archive\/)?([^/]+)/);
+  const m = cwd.match(/^\/home\/deepnar\/projects\/(?:collaborations\/|practice\/)?([^/]+)/);
   return m ? m[1] : null;
 }
 
@@ -35,7 +43,13 @@ function renderTree(node: VNode, prefix: string, depth: number, acc: string[]): 
   });
 }
 
-export function execCommand(raw: string, cwd: string): { lines: TermLine[]; cwd: string; clear?: boolean } {
+function flashFail() {
+  const s = useShell.getState();
+  s.setPetMode("failed");
+  setTimeout(() => useShell.getState().setPetMode("idle"), 1500);
+}
+
+export function execCommand(raw: string, cwd: string): { lines: TermLine[]; cwd: string; clear?: boolean; action?: TermAction } {
   const s = useShell.getState();
   const out = (text: string, kind: TermLine["kind"] = "out"): TermLine => ({ text, kind });
   const input = raw.trim();
@@ -43,17 +57,14 @@ export function execCommand(raw: string, cwd: string): { lines: TermLine[]; cwd:
   const [cmd, ...rest] = input.split(/\s+/);
   const arg = rest.join(" ");
 
-  const done = (lines: TermLine[], nextCwd = cwd) => {
-    s.setPetMood("alert");
-    setTimeout(() => useShell.getState().setPetMood("idle"), 1500);
-    return { lines, cwd: nextCwd };
-  };
+  const done = (lines: TermLine[], nextCwd = cwd) => ({ lines, cwd: nextCwd });
   const ok = (lines: TermLine[], nextCwd = cwd) => {
     sound.success();
     return done(lines, nextCwd);
   };
   const bad = (text: string) => {
     sound.error();
+    flashFail();
     return done([out(text, "err")]);
   };
 
@@ -61,21 +72,21 @@ export function execCommand(raw: string, cwd: string): { lines: TermLine[]; cwd:
     case "help":
       return ok([
         out("fs:        ls · tree · cd · pwd · cat · open · find · grep"),
-        out("buffers:   :e <path> · :bd · :bnext · :bprev"),
-        out("go:        home · projects · research · git · profile · resume · contact · github"),
-        out("system:    theme <dark|light> · neofetch · btop · history · clear"),
+        out("buffers:   :e <path> · :bd"),
+        out("go:        home · projects · research · oss · about · resume · contact"),
+        out("system:    theme <dark|light> · neofetch · btop · history · clear (c)"),
         out("agent:     ask <question>  (local index, offline)"),
-        out("fun:       fortune · uname -a · man deepnar · pacman -Q · pet · radio"),
+        out("fun:       fortune · uname -a · man deepnar · pet · radio"),
       ]);
     case "ls": {
-      const target = resolvePath(cwd, rest[0]);
+      const target = resolvePath(cwd, rest[0] ?? ".");
       const node = findNode(target);
       if (!node) return bad(`ls: no such file or directory: ${arg}`);
       if (node.kind !== "dir") return ok([out(node.name)]);
       return ok(listDir(target).map((n) => out(`${n.name}${n.kind === "dir" ? "/" : ""}`, n.kind === "dir" ? "ok" : "out")));
     }
     case "tree": {
-      const target = resolvePath(cwd, rest[0]);
+      const target = resolvePath(cwd, rest[0] ?? ".");
       const node = findNode(target);
       if (!node || node.kind !== "dir") return bad(`tree: ${arg || "."}: not a directory`);
       const acc: string[] = [shortPath(target)];
@@ -87,9 +98,8 @@ export function execCommand(raw: string, cwd: string): { lines: TermLine[]; cwd:
       const node = findNode(target);
       if (!node) return bad(`cd: no such directory: ${arg}`);
       if (node.kind !== "dir") return bad(`cd: not a directory: ${arg}`);
-      s.setCwd(target);
-      s.go(s.workspace, target);
-      return ok([]);
+      s.navTo(target); // main browser follows the active terminal
+      return ok([], target);
     }
     case "pwd":
       return ok([out(shortPath(cwd))]);
@@ -99,7 +109,7 @@ export function execCommand(raw: string, cwd: string): { lines: TermLine[]; cwd:
       if (arg === "resume.pdf" || arg.endsWith("resume.pdf")) {
         s.openFile(`${HOME}/resume.pdf`, "pdf");
         sound.fileOpen();
-        return ok([out("opened ~/resume.pdf — [ open pdf ] [ download ↓ ]")]);
+        return ok([out("opened ~/resume.pdf — [ open ] [ download ↓ ]")]);
       }
       const target = resolvePath(cwd, arg);
       const node = findNode(target);
@@ -144,14 +154,8 @@ export function execCommand(raw: string, cwd: string): { lines: TermLine[]; cwd:
       sound.fileClose();
       return ok([out(`closed ${shortPath(active)}`)]);
     }
-    case ":bnext":
-      s.cycleBuffer(1);
-      return ok(s.activeBuffer ? [out(`→ ${shortPath(s.activeBuffer)}`)] : [out("(no buffers)", "dim")]);
-    case ":bprev":
-      s.cycleBuffer(-1);
-      return ok(s.activeBuffer ? [out(`→ ${shortPath(s.activeBuffer)}`)] : [out("(no buffers)", "dim")]);
     case "whoami":
-      return ok([out("deepesh — deepnar@orien, guest session (read-only)")]);
+      return ok([out("deepesh — deepnar@orien, guest session")]);
     case "hostname":
       return ok([out("orien")]);
     case "uname":
@@ -159,37 +163,39 @@ export function execCommand(raw: string, cwd: string): { lines: TermLine[]; cwd:
     case "man":
       if (arg === "deepnar") return ok([out("DEEPNAR(1) — builds memory systems, evaluates them honestly, merges upstream. see ~/projects/ice")]);
       return bad(`no manual entry for ${arg || "…"}`);
-    case "pacman":
-      return ok([out("python 3.12 · typescript 5 · rust (learning) · postgresql + pgvector · ollama · or-tools · docker")]);
-    case "neofetch":
+    case "neofetch": {
+      const main = projects.filter((p) => p.kind !== "practice").length;
       return ok([
         out("deepnar@orien", "ok"),
         out("─────────────────", "dim"),
         out("OS: Arch (CachyOS) · guest session"),
         out("Shell: workstation-shell · Editor: nvim · Terminal: ghostty"),
-        out(`Projects: 11 · Repos: ${gh.repoCount} · Merged↑: ${gh.mergedPRs} lifetime`),
-        out("Research: LSREP (arXiv 2609.16730) · ICE v2 in revision"),
+        out(`Projects: ${main} · Repos: ${(gh as { repoCount: number }).repoCount} · Merged↑: ${(gh as { mergedPRs: number }).mergedPRs} lifetime`),
+        out("Research: LSREP (arXiv 2609.16730)"),
         out(`Uptime: ${Math.max(1, Math.round((Date.now() - BOOT_TIME) / 60000))} min · Theme: ${s.theme}`),
       ]);
-    case "btop":
+    }
+    case "btop": {
+      const cal = (gh as unknown as { calendar: { weeks: { date: string; count: number }[][] }; syncedAt: string }).calendar;
+      const sums = cal.weeks.slice(-8).map((w) => w.reduce((a: number, d: { count: number }) => a + d.count, 0));
       return ok([
-        out(`repos ${gh.repoCount} · merged↑ ${gh.mergedPRs} · open ${gh.openPRs} · synced ${gh.syncedAt}`, "ok"),
-        out(`activity ${(gh.activityWeeks as number[]).slice(-8).join(" ")}`, "dim"),
-        out(`buffers ${s.openBuffers.length} · workspace ${s.workspace} · cwd ${shortPath(s.cwd)}`, "dim"),
+        out(`repos ${(gh as unknown as { repoCount: number }).repoCount} · synced ${cal ? (gh as unknown as { syncedAt: string }).syncedAt : ""}`, "ok"),
+        out(`activity ${sums.join(" ")}`, "dim"),
+        out(`buffers ${s.openBuffers.length} · cwd ${shortPath(s.cwd)}`, "dim"),
       ]);
+    }
     case "fortune":
       return ok([out(`❝ ${FORTUNES[Math.floor(Math.random() * FORTUNES.length)]} ❞`, "dim")]);
     case "nvim":
     case "vim":
       return ok([out("nvim is already everywhere here. try :e ~/projects/ice/README.md", "dim")]);
     case "sudo":
-      if (arg === "hire deepnar") return ok([out("[sudo] verified: merged upstream 5×, papers on arXiv, evaluates honestly.", "ok"), out("proceed → open ~/contact.json", "ok")]);
+      if (arg === "hire deepnar") return ok([out("[sudo] verified: merged upstream, paper on arXiv, evaluates honestly.", "ok"), out("proceed → open ~/contact.json", "ok")]);
       return bad("[sudo] guest session is read-only. nice try.");
     case "rm":
       return bad("rm: guest session is read-only. nothing was harmed.");
     case "exit":
       s.setPhase("desktop");
-      s.setPetAnchor("desktop");
       sound.appClose();
       return ok([out("workstation minimized — back to desktop.", "dim")]);
     case "pet":
@@ -201,48 +207,75 @@ export function execCommand(raw: string, cwd: string): { lines: TermLine[]; cwd:
     case "theme":
       if (arg === "dark" || arg === "light") {
         s.setTheme(arg);
-        sound.relay();
+        sound.toggle();
         s.notify(`theme → ${arg}`);
         return ok([out(`theme → ${arg}`)]);
       }
       return bad("usage: theme <dark|light>");
     case "resume":
-      s.openFile(`${HOME}/resume.md`, "markdown");
-      return ok([out("opened ~/resume.md — download the PDF from ~/resume.pdf")]);
+      s.openFile(`${HOME}/resume.pdf`, "pdf");
+      return ok([out("opened ~/resume.pdf")]);
     case "contact":
       s.toggle("contactOpen");
       return ok([out("contact panel opened.")]);
     case "github":
-      s.go("git");
-      return ok([out("→ workspace 4 · oss")]);
+      s.navTo(`${HOME}/oss`);
+      return ok([out("→ ~/oss")]);
     case "home":
-    case "projects":
-    case "research":
-    case "git":
-    case "profile": {
-      const map: Record<string, WorkspaceId> = { home: "home", projects: "projects", research: "research", git: "git", profile: "profile" };
-      s.go(map[cmd]);
-      sound.tick(1);
+      s.navTo(HOME);
+      sound.nav();
       return ok([]);
-    }
+    case "projects":
+      s.navTo(`${HOME}/projects`);
+      sound.nav();
+      return ok([]);
+    case "research":
+      s.navTo(`${HOME}/research`);
+      sound.nav();
+      return ok([]);
+    case "oss":
+    case "git":
+      s.navTo(`${HOME}/oss`);
+      sound.nav();
+      return ok([]);
+    case "about":
+    case "profile":
+      s.navTo(`${HOME}/about`);
+      sound.nav();
+      return ok([]);
     case "download":
       if (arg.includes("resume") || arg === "") {
         s.notify("resume downloaded");
         sound.download();
-        return ok([out("resume.pdf → downloads (sanitized public CV)")]);
+        return { lines: [out("resume.pdf → downloads (sanitized public CV)")], cwd, action: { type: "download", url: "/resume/Deepesh_Sonar_CV.pdf", filename: "Deepesh_Sonar_CV.pdf" } };
       }
       return bad("usage: download resume.pdf");
     case "history":
       return ok([out("(this shell keeps history with ↑↓ — session only)", "dim")]);
+    case "c":
     case "clear":
       return { lines: [], cwd, clear: true };
+    case "assistant": {
+      const m = arg.match(/^--debug\s+"?(.+?)"?$/);
+      const q = (m ? m[1] : arg).trim();
+      if (!q) return bad('usage: assistant --debug "<question>"');
+      const a = answer(q, { cwd, lastEntity: s.lastEntity, lastIntent: s.lastIntent });
+      s.setAssistantCtx(a.entity, a.intent);
+      return ok([
+        out(`intent:  ${a.intent}`, "dim"),
+        out(`entity:  ${a.entity ?? "—"}`, "dim"),
+        ...a.trace.map((t) => out(`trace:   ${t}`, "dim")),
+        out(`sources: ${a.sources.join(", ") || "—"}`, "dim"),
+        ...a.body.map((b) => out(b)),
+      ]);
+    }
     case "ask": {
       if (!arg) return bad("usage: ask <question> — e.g. ask why did you build ICE?");
-      const a = answer(arg, { project: projectFromCwd(cwd), workspace: s.workspace, lastIntent: s.lastIntent });
-      s.setLastIntent(a.intent);
-      s.setPetMood("thinking");
-      setTimeout(() => useShell.getState().setPetMood("idle"), 2200);
-      const lines = [out(`◇ ctx ${shortPath(cwd)} · local-index`, "dim"), out(`◆ ${a.intent} · ${a.steps[a.steps.length - 1] ?? "indexed"}`, "dim"), ...a.body.map((b) => out(b))];
+      const a = answer(arg, { cwd, lastEntity: s.lastEntity, lastIntent: s.lastIntent });
+      s.setAssistantCtx(a.entity, a.intent);
+      s.setPetMode("thinking");
+      setTimeout(() => useShell.getState().setPetMode("idle"), 2200);
+      const lines = [out(`◆ ${a.intent}`, "dim"), ...a.body.map((b) => out(b))];
       return ok(lines);
     }
     default:
