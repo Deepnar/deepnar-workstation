@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useShell } from "@/lib/store";
 import { HOME, findNode, listDir, shortPath, type VNode } from "@/vfs/vfs";
 import { prs } from "@/content/oss";
@@ -46,6 +46,7 @@ export function ActionBar({ node }: { node: VNode }) {
   const acts: { label: string; href: string }[] = [];
   if (meta.github) acts.push({ label: "GitHub ↗", href: meta.github });
   if (meta.arxiv) acts.push({ label: "arXiv ↗", href: meta.arxiv });
+  if (meta.doi) acts.push({ label: "DOI ↗", href: meta.doi });
   if (meta.upstream) acts.push({ label: "upstream ↗", href: meta.upstream });
   if (!acts.length) return null;
   return (
@@ -113,7 +114,6 @@ export function FileView({ node }: { node: VNode }) {
     );
   }
   if (node.kind === "log") return <div className="p-5 max-w-3xl"><Code lang="log" lines={node.body ?? []} /></div>;
-  if (node.kind === "calendar") return <CalendarView />;
   if (node.kind === "pdf") {
     return (
       <div className="p-5 space-y-3 text-[13px] max-w-xl" style={{ color: "var(--fg-dim)" }}>
@@ -124,7 +124,7 @@ export function FileView({ node }: { node: VNode }) {
             onClick={() => { setPdfOpen((v) => !v); sound.fileOpen(); }}>
             {pdfOpen ? "close" : "open"}
           </button>
-          <a href={node.link} download="Deepesh_Sonar_CV.pdf" className="px-3 py-1.5 border"
+          <a href={node.link} download="Deepesh_Sonar_Resume.pdf" className="px-3 py-1.5 border"
             style={{ borderColor: "var(--border)", color: "var(--accent-soft)" }}
             onClick={() => { sound.download(); notify("resume downloaded"); }}>
             download ↓
@@ -137,79 +137,45 @@ export function FileView({ node }: { node: VNode }) {
   return <div className="p-5 max-w-3xl"><Markdown node={node} /></div>;
 }
 
-/* ── real github contribution calendar ── */
+/* ── home activity: the full year, github-style ── */
 interface CalDay { date: string; count: number }
 
-export function CalendarView() {
-  const cal = (gh as unknown as { syncedAt: string; repoCount: number; mergedPRs: number; openPRs: number; calendar: { total: number; weeks: CalDay[][] }; stars: { repo: string; stars: number }[] }).calendar;
-  const [hover, setHover] = useState<CalDay | null>(null);
+function useCalendar() {
+  const cal = (gh as unknown as { total?: number; calendar: { total: number; weeks: CalDay[][] } }).calendar;
   const max = useMemo(() => Math.max(1, ...cal.weeks.flat().map((d) => d.count)), [cal]);
   const level = (c: number) => (c === 0 ? 0 : c < max * 0.25 ? 1 : c < max * 0.5 ? 2 : c < max * 0.8 ? 3 : 4);
-  const months = useMemo(() => {
-    const labels: { i: number; label: string }[] = [];
-    cal.weeks.forEach((w, i) => {
-      const first = w.find((d) => d.date.slice(8) === "01" || d.date.endsWith("-01"));
-      const m = w[0]?.date.slice(0, 7);
-      if (m && (i === 0 || w[0].date.slice(0, 7) !== cal.weeks[i - 1][0]?.date.slice(0, 7))) {
-        const d = new Date(w[0].date + "T00:00:00");
-        labels.push({ i, label: d.toLocaleString("en", { month: "short" }) });
-      }
-      void first;
-    });
-    return labels;
-  }, [cal]);
-  const fmt = (d: CalDay) => {
-    const dt = new Date(d.date + "T00:00:00");
-    return `${dt.toLocaleString("en", { month: "short", day: "numeric", year: "numeric" })} — ${d.count} contribution${d.count === 1 ? "" : "s"}`;
-  };
+  return { cal, level };
+}
+
+export function MiniCalendar() {
+  const { cal, level } = useCalendar();
+  const weeks = cal.weeks.slice(-53);
+  const [hover, setHover] = useState<CalDay | null>(null);
   return (
-    <div className="p-5 space-y-4 text-[12.5px] max-w-4xl" style={{ color: "var(--fg-dim)" }}>
-      <a href="https://github.com/Deepnar" target="_blank" rel="noreferrer"
-        className="text-[11px] uppercase tracking-[0.14em] hover:underline" style={{ color: "var(--muted)" }}>
-        contribution calendar · {cal.total.toLocaleString()} in the last year · synced {(gh as unknown as { syncedAt: string }).syncedAt} ↗
-      </a>
-      <div className="overflow-x-auto pb-1">
-        <div className="inline-block">
-          <div className="flex text-[10px] mb-1" style={{ color: "var(--muted)" }}>
-            <span className="w-8 shrink-0" />
-            {cal.weeks.map((_, i) => {
-              const m = months.find((x) => x.i === i);
-              return <span key={i} className="w-[11px] shrink-0 overflow-visible whitespace-nowrap">{m?.label ?? ""}</span>;
-            })}
-          </div>
-          <div className="flex gap-[3px]">
-            <div className="w-8 shrink-0 text-[10px] flex flex-col justify-between py-[1px]" style={{ color: "var(--muted)" }}>
-              <span>Mon</span><span>Wed</span><span>Fri</span>
+    <div>
+      <div className="pb-1">
+        <div className="flex gap-[2px]">
+          {weeks.map((w, i) => (
+            <div key={i} className="flex flex-col gap-[2px]">
+              {w.map((d) => (
+                <div
+                  key={d.date}
+                  title={`${d.date} — ${d.count} contribution${d.count === 1 ? "" : "s"}`}
+                  onMouseEnter={() => setHover(d)}
+                  className="w-[7px] h-[7px] rounded-[2px]"
+                  style={{
+                    background: level(d.count) === 0 ? "var(--border)" : "var(--ok)",
+                    opacity: level(d.count) === 0 ? 0.4 : 0.25 + level(d.count) * 0.19,
+                    outline: hover?.date === d.date ? "1px solid var(--fg)" : "none",
+                  }}
+                />
+              ))}
             </div>
-            {cal.weeks.map((w, i) => (
-              <div key={i} className="flex flex-col gap-[3px]">
-                {w.map((d) => (
-                  <div
-                    key={d.date}
-                    title={fmt(d)}
-                    data-date={d.date}
-                    data-count={d.count}
-                    onMouseEnter={() => setHover(d)}
-                    className="w-[11px] h-[11px] rounded-[2px]"
-                    style={{
-                      background: level(d.count) === 0 ? "var(--border)" : "var(--ok)",
-                      opacity: level(d.count) === 0 ? 0.5 : 0.25 + level(d.count) * 0.19,
-                      outline: hover?.date === d.date ? "1px solid var(--fg)" : "none",
-                    }}
-                  />
-                ))}
-              </div>
-            ))}
-          </div>
+          ))}
         </div>
       </div>
-      <div className="text-[12px] h-4" style={{ color: "var(--icy)" }} aria-live="polite">
-        {hover ? fmt(hover) : "hover a square for the day count"}
-      </div>
-      <div className="flex gap-5 flex-wrap text-[12px]">
-        <span><b style={{ color: "var(--fg)" }}>{(gh as unknown as { repoCount: number }).repoCount}</b> public repos</span>
-        <span><b style={{ color: "var(--ok)" }}>{(gh as unknown as { mergedPRs: number }).mergedPRs}</b> merged upstream (lifetime)</span>
-        <span><b style={{ color: "var(--warm)" }}>{(gh as unknown as { openPRs: number }).openPRs}</b> open</span>
+      <div className="text-[11.5px] h-4 mt-1" style={{ color: "var(--icy)" }} aria-live="polite">
+        {hover ? `${hover.date} — ${hover.count}` : `${cal.total.toLocaleString()} in the last year`}
       </div>
     </div>
   );
@@ -227,30 +193,48 @@ const ACTIONS: { key: string; label: string; run: () => void }[] = [
   { key: "?", label: "Help", run: () => useShell.getState().toggle("helpOpen") },
 ];
 
+/* ── block/pixel identity, LazyVim-dashboard spirit, no LazyVim branding ── */
+// 4-wide pixel glyphs, 2-space gaps — every row exactly 40 cells
+function BlockLogo() {
+  return (
+    <img src="/deepnar-wordmark.png" alt="DEEPNAR" width={520} height={191}
+      className="max-w-full h-auto select-none" draggable={false}
+      style={{ borderRadius: 10, border: "1px solid var(--border)" }} />
+  );
+}
+
 export function HomeView() {
   const { recent, openFile } = useShell();
   const recentShown = (recent.length > 0 ? recent : [`${HOME}/projects/ice/README.md`, `${HOME}/research/lsrep-ice/README.md`, `${HOME}/oss/merged/mne-python-14283.md`]).slice(0, 5);
   return (
     <div className="h-full flex flex-col items-center justify-center px-6 py-5 overflow-auto">
-      <div className="text-[26px] font-bold tracking-[0.3em] mb-1" style={{ color: "var(--fg)" }}>DEEPNAR</div>
-      <div className="text-[12.5px] mb-5" style={{ color: "var(--muted)" }}>{profile.tagline}</div>
-      <div className="w-full max-w-md" role="list" aria-label="quick actions">
-        {ACTIONS.map((a) => (
-          <button key={a.key} role="listitem" onClick={() => { sound.select(); a.run(); }}
-            className="w-full flex items-center gap-3 px-3 py-[5px] text-[13px] text-left hover:bg-[var(--sel-bg)]">
-            <span className="w-6 text-center text-[12px]" style={{ color: "var(--icy)" }}>{a.key}</span>
-            <span style={{ color: "var(--fg-dim)" }}>{a.label}</span>
-          </button>
-        ))}
+      <BlockLogo />
+      <div className="text-[12.5px] mt-3 mb-5" style={{ color: "var(--muted)" }}>{profile.tagline}</div>
+      <div className="w-full max-w-2xl grid gap-6 md:grid-cols-2">
+        <div role="list" aria-label="quick actions">
+          {ACTIONS.map((a) => (
+            <button key={a.key} role="listitem" onClick={() => { sound.select(); a.run(); }}
+              className="w-full flex items-center gap-3 px-3 py-[5px] text-[13px] text-left hover:bg-[var(--sel-bg)]">
+              <span className="w-6 text-center text-[12px]" style={{ color: "var(--icy)" }}>{a.key}</span>
+              <span style={{ color: "var(--fg-dim)" }}>{a.label}</span>
+            </button>
+          ))}
+        </div>
+        <div>
+          <div className="text-[10.5px] uppercase tracking-[0.16em] px-3 mb-1" style={{ color: "var(--muted)" }}>recent</div>
+          {recentShown.map((r) => (
+            <button key={r} onClick={() => { const n = findNode(r); if (n) { sound.fileOpen(); openFile(r, n.kind); } }}
+              className="w-full text-left px-3 py-[3px] text-[12px] truncate hover:bg-[var(--sel-bg)]" style={{ color: "var(--fg-dim)" }}>
+              <span style={{ color: "var(--muted)" }}>· </span>{shortPath(r)}
+            </button>
+          ))}
+        </div>
       </div>
-      <div className="w-full max-w-md mt-5">
-        <div className="text-[10.5px] uppercase tracking-[0.16em] px-3 mb-1" style={{ color: "var(--muted)" }}>recent</div>
-        {recentShown.map((r) => (
-          <button key={r} onClick={() => { const n = findNode(r); if (n) { sound.fileOpen(); openFile(r, n.kind); } }}
-            className="w-full text-left px-3 py-[3px] text-[12px] truncate hover:bg-[var(--sel-bg)]" style={{ color: "var(--fg-dim)" }}>
-            <span style={{ color: "var(--muted)" }}>· </span>{shortPath(r)}
-          </button>
-        ))}
+      <div className="w-full max-w-2xl mt-5 flex flex-col items-center">
+        <div className="text-[10.5px] uppercase tracking-[0.16em] mb-2" style={{ color: "var(--muted)" }}>
+          <a href="https://github.com/Deepnar" target="_blank" rel="noreferrer" className="hover:underline">activity ↗</a>
+        </div>
+        <MiniCalendar />
       </div>
     </div>
   );
@@ -259,9 +243,19 @@ export function HomeView() {
 /* ── oss 3-pane ── */
 export function OssView() {
   const repos = useMemo(() => [...new Set(prs.map((p) => p.repo))], []);
+  const focusNonce = useShell((s) => s.listFocusNonce);
+  const listRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { listRef.current?.focus(); }, [focusNonce]);
   const [repo, setRepo] = useState(repos[0]);
   const [idx, setIdx] = useState(0);
+  const [pane, setPane] = useState<"repos" | "prs">("prs");
   const { openFile } = useShell();
+  const repoRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    // follow keyboard pane switches; never steal focus from outside (mouse browse)
+    if (!document.activeElement?.closest?.("[aria-label='open source browser']")) return;
+    (pane === "repos" ? repoRef : listRef).current?.focus();
+  }, [pane]);
   const list = prs.filter((p) => p.repo === repo);
   const sel = list[Math.min(idx, list.length - 1)];
   const openSel = (i: number) => {
@@ -272,29 +266,36 @@ export function OssView() {
   };
   return (
     <div className="h-full grid grid-cols-[minmax(150px,220px)_minmax(200px,1fr)_minmax(220px,1.2fr)] min-h-0 text-[12.5px]" role="region" aria-label="open source browser">
-      <div className="border-r overflow-auto min-h-0" style={{ borderColor: "var(--border)" }}>
-        <PaneTitle>repositories</PaneTitle>
+      <div ref={repoRef} className="border-r overflow-auto min-h-0 outline-none" style={{ borderColor: "var(--border)", boxShadow: pane === "repos" ? "inset 2px 0 0 var(--accent)" : "none" }} tabIndex={0}
+        aria-label="repositories" data-active={pane === "repos" ? "true" : undefined}
+        onKeyDown={(e) => {
+          if (e.ctrlKey || e.metaKey || e.altKey) return;
+          const i = repos.indexOf(repo);
+          if (e.key === "j" || e.key === "ArrowDown") { e.preventDefault(); e.stopPropagation(); const n = repos[Math.min(repos.length - 1, i + 1)]; setRepo(n); setIdx(0); sound.tick(1); }
+          else if (e.key === "k" || e.key === "ArrowUp") { e.preventDefault(); e.stopPropagation(); const n = repos[Math.max(0, i - 1)]; setRepo(n); setIdx(0); sound.tick(-1); }
+          else if (e.key === "Enter" || e.key === "l" || e.key === "ArrowRight") { e.preventDefault(); e.stopPropagation(); setPane("prs"); sound.nav(); }
+          else if (e.key === "h" || e.key === "ArrowLeft") { e.preventDefault(); e.stopPropagation(); useShell.getState().navUp(); sound.tick(-1); }
+        }}>
+        <PaneTitle>repositories{pane === "repos" ? " ●" : ""}</PaneTitle>
         {repos.map((r) => (
-          <Row key={r} active={r === repo} onOpen={() => { setRepo(r); setIdx(0); sound.nav(); }}>
+          <Row key={r} active={r === repo} onPick={() => setPane("repos")} onOpen={() => { setRepo(r); setIdx(0); setPane("prs"); sound.nav(); }}>
             <span className="truncate">{r.split("/")[1] ?? r}</span>
           </Row>
         ))}
-        <div className="border-t mt-1 pt-1" style={{ borderColor: "var(--border)" }}>
-          <PaneTitle>activity</PaneTitle>
-          <Row onOpen={() => { sound.fileOpen(); openFile(`${HOME}/oss/activity`, "calendar"); }}>contribution calendar</Row>
-        </div>
       </div>
-      <div className="border-r overflow-auto min-h-0" style={{ borderColor: "var(--border)" }} tabIndex={0}
-        aria-label="pull requests"
+      <div ref={listRef} className="border-r overflow-auto min-h-0 outline-none" style={{ borderColor: "var(--border)", boxShadow: pane === "prs" ? "inset 2px 0 0 var(--accent)" : "none" }} tabIndex={0} autoFocus
+        aria-label="pull requests" data-active={pane === "prs" ? "true" : undefined}
         onKeyDown={(e) => {
-          if (e.key === "j" || e.key === "ArrowDown") { e.preventDefault(); setIdx((i) => Math.min(list.length - 1, i + 1)); }
-          if (e.key === "k" || e.key === "ArrowUp") { e.preventDefault(); setIdx((i) => Math.max(0, i - 1)); }
-          if (e.key === "Enter") openSel(idx);
+          if (e.ctrlKey || e.metaKey || e.altKey) return;
+          if (e.key === "j" || e.key === "ArrowDown") { e.preventDefault(); e.stopPropagation(); setIdx((i) => Math.min(list.length - 1, i + 1)); sound.tick(1); }
+          else if (e.key === "k" || e.key === "ArrowUp") { e.preventDefault(); e.stopPropagation(); setIdx((i) => Math.max(0, i - 1)); sound.tick(-1); }
+          else if (e.key === "Enter") { e.stopPropagation(); openSel(idx); }
+          else if (e.key === "h" || e.key === "ArrowLeft") { e.preventDefault(); e.stopPropagation(); setPane("repos"); sound.nav(); }
         }}>
-        <PaneTitle>pull requests · {repo}</PaneTitle>
+        <PaneTitle>pull requests · {repo}{pane === "prs" ? " ●" : ""}</PaneTitle>
         {list.map((p, i) => (
           <Row key={p.url} active={p.url === sel?.url} hint={p.state === "merged" ? "✓" : "○"}
-            onPick={() => setIdx(i)} onOpen={() => openSel(i)}>
+            onPick={() => { setIdx(i); setPane("prs"); }} onOpen={() => openSel(i)}>
             <span className="truncate">#{p.url.split("/").pop()} {p.title}</span>
           </Row>
         ))}

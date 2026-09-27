@@ -16,7 +16,7 @@ const shot = async (page, name) => {
 const browser = await chromium.launch({ executablePath: "/opt/google/chrome/chrome", args: ["--no-sandbox"] });
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
 const page = await ctx.newPage();
-await page.addInitScript(() => { try { localStorage.setItem("deepnar-theme", "dark"); localStorage.setItem("deepnar-seen", "1"); localStorage.setItem("deepnar-onboard", "1"); } catch {} });
+await page.addInitScript(() => { try { localStorage.setItem("deepnar-theme", "dark"); localStorage.setItem("deepnar-seen", "1"); localStorage.setItem("deepnar-onboard", "1"); localStorage.setItem("deepnar-hint-seen", "1"); } catch {} });
 const errors = [];
 page.on("pageerror", (e) => errors.push(String(e).slice(0, 160)));
 
@@ -30,9 +30,7 @@ const dev = (() => {
 
 const enterWs = async () => {
   await page.getByRole("button", { name: /enter guest session/i }).click();
-  await page.waitForTimeout(600);
-  await page.getByRole("button", { name: /open workstation/i }).click();
-  await page.waitForTimeout(800);
+  await page.waitForTimeout(1600);
 };
 const term = async (cmd) => {
   await page.locator("main").click();
@@ -63,15 +61,17 @@ await shot(page, "1-boot");
 await page.waitForTimeout(1500);
 await shot(page, "2-greeter");
 
-// 3. desktop ws1
+// 3-4. workstation home (guest lands straight in)
 await page.getByRole("button", { name: /enter guest session/i }).click();
-await page.waitForTimeout(600);
+await page.waitForTimeout(1600);
 await shot(page, "3-desktop");
-
-// 4. workstation home
-await page.getByRole("button", { name: /open workstation/i }).click();
-await page.waitForTimeout(800);
 await shot(page, "4-home");
+// desktop page itself (waits behind minimize)
+await page.getByRole("button", { name: "minimize", exact: true }).click();
+await page.waitForTimeout(900);
+await shot(page, "3b-launchers");
+await page.keyboard.press("Alt+1");
+await page.waitForTimeout(900);
 
 // 5-6. browser ice + ice buffer
 await term("cd ~/projects/ice");
@@ -88,8 +88,8 @@ await shot(page, "7-terminal");
 
 // 8. two tabs
 await page.getByLabel("new utility tab").click();
-await page.waitForTimeout(300);
-await page.getByRole("tablist", { name: "utility tabs" }).getByRole("button", { name: "new terminal" }).click();
+await page.getByRole("menuitem", { name: /new terminal/i }).waitFor({ timeout: 8000 });
+await page.getByRole("menuitem", { name: /new terminal/i }).click();
 await page.waitForTimeout(600);
 await shot(page, "8-twotabs");
 
@@ -104,9 +104,9 @@ await term("cd ~/oss");
 await page.keyboard.press("Escape");
 await page.waitForTimeout(300);
 await shot(page, "10-oss");
-await term("open activity");
+await term("open ~/oss/merged/modeldock-221.md");
 await page.waitForTimeout(500);
-await shot(page, "11-calendar");
+await shot(page, "11-oss-pr");
 
 // 12. research
 await term("open ~/research/lsrep-ice/README.md");
@@ -121,19 +121,25 @@ await shot(page, "13-about");
 
 // 14-15. orbit + constellation
 await page.keyboard.press("Alt+2");
-await page.waitForTimeout(600);
+await page.waitForTimeout(2400);
 await shot(page, "14-orbit");
 await page.keyboard.press("Alt+3");
-await page.waitForTimeout(600);
+await page.waitForTimeout(4200);
 await shot(page, "15-signal");
 await page.keyboard.press("Alt+1");
-await page.waitForTimeout(400);
+await page.waitForTimeout(1100);
 
-// 16. light theme
-await page.evaluate(() => { try { localStorage.setItem("deepnar-theme", "light"); } catch {} });
-await page.reload({ waitUntil: "domcontentloaded" });
-await page.waitForTimeout(1800);
-await shot(page, "16-light");
+// 16. web tab (inline lookup)
+await page.keyboard.press("Alt+1");
+await page.waitForTimeout(900);
+await page.locator("main").click();
+await page.keyboard.press("Control+`");
+await page.waitForTimeout(500);
+await page.getByLabel("new utility tab").click();
+await page.getByRole("menuitem", { name: "web", exact: true }).waitFor({ timeout: 8000 });
+await page.getByRole("menuitem", { name: "web", exact: true }).click();
+await page.waitForTimeout(600);
+await shot(page, "16-webtab");
 
 // 17. mobile
 await page.setViewportSize({ width: 390, height: 844 });

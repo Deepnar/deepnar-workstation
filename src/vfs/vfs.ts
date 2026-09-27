@@ -34,6 +34,7 @@ const dir = (path: string, name: string, children: VNode[], extra?: Partial<VNod
 const actions = (p: Pick<Project, "links" | "upstream" | "repo">): Record<string, string> => ({
   github: p.links.github,
   ...(p.links.arxiv ? { arxiv: p.links.arxiv } : {}),
+  ...(p.links.doi ? { doi: p.links.doi } : {}),
   ...(p.upstream ? { upstream: `https://github.com/${p.upstream}` } : {}),
 });
 
@@ -157,7 +158,6 @@ const ossDir: VNode = dir(`${HOME}/oss`, "oss", [
     { searchTerms: "oss repos repositories" }),
   dir(`${HOME}/oss/merged`, "merged", prs.filter((p) => p.state === "merged").map((p, i) => prNode(p.repo, p.title, p.url, "merged", p.note, `m${i}`))),
   dir(`${HOME}/oss/open`, "open", prs.filter((p) => p.state === "open").map((p, i) => prNode(p.repo, p.title, p.url, "open", p.note, `o${i}`))),
-  { path: `${HOME}/oss/activity`, name: "activity", kind: "calendar", title: "contribution calendar" },
 ]);
 
 const aboutDir: VNode = dir(`${HOME}/about`, "about", [
@@ -168,7 +168,7 @@ const aboutDir: VNode = dir(`${HOME}/about`, "about", [
 ]);
 
 export const ROOT: VNode = dir(HOME, "deepnar", [projectsDir, researchDir, ossDir, aboutDir,
-  { path: `${HOME}/resume.pdf`, name: "resume.pdf", kind: "pdf", title: "resume (PDF)", link: "/resume/Deepesh_Sonar_CV.pdf", body: ["resume.pdf — sanitized public CV.", "open to view · download to save."] },
+  { path: `${HOME}/resume.pdf`, name: "resume.pdf", kind: "pdf", title: "resume (PDF)", link: "/resume/Deepesh_Sonar_Resume.pdf", body: ["resume.pdf — sanitized public CV.", "open to view · download to save."] },
   { path: `${HOME}/contact.json`, name: "contact.json", kind: "contact", title: "contact",
     body: [`{`, `  "github": "${profile.links.github}",`, `  "linkedin": "${profile.links.linkedin}",`,
       `  "email": "18deepnar@gmail.com",`, `  "x": "${profile.links.x}",`, `  "orcid": "${profile.links.orcid}"`, `}`] },

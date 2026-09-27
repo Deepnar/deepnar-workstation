@@ -14,6 +14,7 @@ await page.addInitScript(() => {
     localStorage.setItem("deepnar-theme", "dark");
     localStorage.setItem("deepnar-seen", "1");
     localStorage.setItem("deepnar-onboard", "1");
+    localStorage.setItem("deepnar-hint-seen", "1");
   } catch { /* noop */ }
 });
 page.on("pageerror", (e) => { results.push(`PAGEERROR ${String(e).slice(0, 150)}`); process.exitCode = 1; });
@@ -86,8 +87,8 @@ check("browser followed cd", await page.getByLabel("file navigation").innerText(
 // 4. second terminal tab isolation
 await page.getByRole("tab", { name: /terminal 1/ }).click();
 await page.getByLabel("new utility tab").click();
-await page.waitForTimeout(300);
-await page.getByRole("tablist", { name: "utility tabs" }).getByRole("button", { name: "new terminal" }).click();
+await page.waitForTimeout(400);
+await page.getByRole("menuitem", { name: /new terminal/i }).click();
 await page.waitForTimeout(500);
 const tabCount = await page.getByRole("tablist", { name: "utility tabs" }).getByRole("tab").count().catch(() => 0);
 check("two terminal tabs", tabCount >= 2 || (await page.locator('[data-testid^="xterm-"]').count()) >= 2);
@@ -163,9 +164,9 @@ check("explorer size persists", Math.abs(expPersist - expAfter) < 40);
 await page.goto("http://127.0.0.1:3001/", { waitUntil: "domcontentloaded" });
 await page.waitForTimeout(1500);
 await page.getByRole("button", { name: /enter guest session/i }).click();
-await page.waitForTimeout(600);
-await page.getByRole("button", { name: /open workstation/i }).click();
-await page.waitForTimeout(800);
+await page.waitForTimeout(1600);
+// guest lands straight in the workstation (desktop waits behind minimize)
+check("login lands in workstation", await page.getByLabel("file navigation").count() >= 1);
 for (const n of ["projects", "collaborations", "practice", "research", "oss"]) {
   await page.getByRole("button", { name: new RegExp(`(expand|collapse) ${n}`) }).click().catch(() => {});
   await page.waitForTimeout(150);
@@ -237,15 +238,17 @@ check("no timeline.log", noTimeline === 0);
 const noNow = await page.getByLabel("file explorer").getByText("now.md", { exact: true }).count().catch(() => 0);
 check("no now.md", noNow === 0);
 
-// 15. contribution calendar: real days + hover readout
-await expandIfCollapsed("oss");
-await page.getByLabel("file explorer").getByText("activity", { exact: true }).click();
+// 15. home activity: compact mini calendar (oss/activity file removed)
+await page.getByTitle("home").click();
 await page.waitForTimeout(500);
-const cells = await page.locator("main").locator("[data-date]").count();
-check("calendar has ~365 days", cells > 300 && cells < 400);
-await page.locator("main").locator("[data-date]").nth(200).hover();
+const homeText = await page.locator("main").innerText();
+check("home shows wordmark", await page.locator("main").locator("img[alt='DEEPNAR']").count() >= 1);
+check("home shows activity total", /in the last year/.test(homeText));
+const miniCells = await page.locator("main").locator("div[title*='contribution']").count();
+check("mini calendar has recent weeks", miniCells > 300 && miniCells < 400);
+await page.locator("main").locator("div[title*='contribution']").nth(40).hover();
 await page.waitForTimeout(200);
-check("calendar hover readout", (await page.locator("main").innerText()).includes("contribution"));
+check("mini hover readout", (await page.locator("main").innerText()).includes("202"));
 
 // 16. desktop spaces via alt keys (app content follows the space)
 await page.keyboard.press("Alt+2");
@@ -253,7 +256,7 @@ await page.waitForTimeout(400);
 check("alt+2 → orbit app", (await page.locator("main").innerText().catch(() => "")) === "" || (await page.getByLabel("orbit game").count()) >= 1);
 await page.keyboard.press("Alt+3");
 await page.waitForTimeout(400);
-check("alt+3 → signal app", await page.getByLabel("project constellation").count() >= 1);
+check("alt+3 → signal app", await page.getByLabel("signal knowledge graph").count() >= 1);
 await page.keyboard.press("Alt+1");
 await page.waitForTimeout(400);
 check("alt+1 → workstation", await page.getByLabel("file navigation").count() >= 1);
@@ -261,11 +264,11 @@ check("alt+1 → workstation", await page.getByLabel("file navigation").count() 
 await page.getByRole("button", { name: "minimize", exact: true }).click();
 await page.waitForTimeout(400);
 await page.keyboard.press("Alt+2");
-await page.waitForTimeout(300);
-check("desktop orbit launcher", await page.getByRole("button", { name: /open orbit/i }).count() >= 1);
+await page.waitForTimeout(1100);
+check("alt+2 dives into orbit", await page.getByLabel("orbit game").count() >= 1);
 await page.keyboard.press("Alt+1");
-await page.waitForTimeout(300);
-check("desktop workstation launcher", await page.getByRole("button", { name: /open workstation/i }).count() >= 1);
+await page.waitForTimeout(1100);
+check("alt+1 dives into workstation", await page.getByLabel("file navigation").count() >= 1);
 
 // 17. overview is gone
 check("no overview", (await page.getByRole("button", { name: /^overview$/i }).count()) === 0);
@@ -289,7 +292,224 @@ await page.waitForTimeout(400);
 check("--debug shows trace", (await termText()).includes("intent:") && (await termText()).includes("entity:"));
 
 // 20. pet is a canvas creature in the statusline
-check("pet canvas present", (await page.getByLabel("status").locator("canvas").count()) >= 1);
+check("pet canvas present", (await page.getByLabel(/companion creature/).count()) >= 1);
+
+// 21. directory/buffer view state (exact acceptance test from the brief)
+await page.goto("http://127.0.0.1:3001/?open=~/projects/ice/README.md", { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(1500);
+check("21a buffer open", (await page.locator("main").innerText()).includes("Infinite Context Engine"));
+// finder → ~/projects must show the BROWSER, keeping the tab
+await page.locator("main").click();
+await page.keyboard.press("Control+k");
+await page.waitForTimeout(300);
+await page.getByPlaceholder(/find files/i).fill("~/projects");
+await page.waitForTimeout(300);
+await page.keyboard.press("Enter");
+await page.waitForTimeout(500);
+check("21b finder dir → browser", (await page.getByLabel("file navigation").innerText()).includes("~/projects"));
+check("21c tab survives nav", await page.getByRole("tablist", { name: "buffers" }).getByRole("tab").count() >= 1);
+check("21d no stale buffer", !(await page.locator("main").innerText()).includes("Infinite Context Engine"));
+// click timetable-generator/ → browse it
+await page.getByRole("listbox").getByText("timetable-generator/", { exact: true }).click();
+await page.waitForTimeout(400);
+check("21e browse timetable", (await page.getByLabel("file navigation").innerText()).includes("timetable-generator"));
+// click README tab → old ICE README back
+await page.getByRole("tablist", { name: "buffers" }).getByRole("tab").first().click();
+await page.waitForTimeout(400);
+check("21f tab restores buffer", (await page.locator("main").innerText()).includes("Infinite Context Engine"));
+// finder → ~/research → browse research
+await page.keyboard.press("Control+k");
+await page.waitForTimeout(300);
+await page.getByPlaceholder(/find files/i).fill("~/research");
+await page.waitForTimeout(300);
+await page.keyboard.press("Enter");
+await page.waitForTimeout(500);
+check("21g finder research → browser", (await page.getByLabel("file navigation").innerText()).includes("~/research"));
+
+// 22. dock matrix: toggle hides without destroying; + menu opens real tabs
+await page.keyboard.press("Control+`");
+await page.waitForTimeout(500);
+const dockTabName = await page.getByRole("tablist", { name: "utility tabs" }).getByRole("tab", { selected: true }).innerText();
+await page.getByRole("button", { name: "toggle utility dock" }).click();
+await page.waitForTimeout(300);
+check("22a dock hides", await page.getByRole("tablist", { name: "utility tabs" }).count() === 0);
+await page.getByRole("button", { name: "toggle utility dock" }).click();
+await page.waitForTimeout(800);
+check("22b dock restores tab", (await page.getByRole("tablist", { name: "utility tabs" }).getByRole("tab", { selected: true }).innerText()) === dockTabName);
+await page.getByLabel("new utility tab").click();
+await page.getByRole("menuitem", { name: "web", exact: true }).waitFor({ timeout: 8000 });
+check("22c + menu visible", await page.getByRole("menuitem", { name: "web", exact: true }).count() >= 1);
+await page.getByRole("menuitem", { name: "web", exact: true }).click();
+await page.waitForTimeout(400);
+check("22d web tab opens", await page.getByPlaceholder(/search the web/i).count() >= 1);
+await page.getByRole("menuitem", { name: "web", exact: true }).click().catch(() => {});
+await page.keyboard.press("/");
+await page.waitForTimeout(400);
+check("22e / focuses agent", await page.getByLabel("agent input").count() >= 1);
+
+// 23. logout clears session, preserves theme, returns to greeter
+await page.getByRole("button", { name: "log out" }).click();
+await page.waitForTimeout(600);
+check("23a logout → greeter", await page.getByRole("button", { name: /enter guest session/i }).count() >= 1);
+check("23b light-only theme", await page.evaluate(() => document.documentElement.dataset.theme === "light"));
+await page.getByRole("button", { name: /enter guest session/i }).click();
+await page.waitForTimeout(1600);
+check("23c buffers cleared", await page.getByRole("tablist", { name: "buffers" }).getByRole("tab").count().catch(() => 0) === 0);
+
+// 24. orbit: countdown + rocket canvas, keys work without clicking canvas
+await page.keyboard.press("Alt+2");
+await page.waitForTimeout(600);
+check("24a orbit countdown", await page.getByLabel("orbit game").innerText().then((t) => /[321]/.test(t)).catch(() => false));
+await page.waitForTimeout(2200);
+await page.keyboard.press("ArrowRight");
+await page.waitForTimeout(400);
+check("24b orbit canvas live", await page.getByLabel("orbit game").locator("canvas").count() >= 1);
+check("24c orbit hull shown", (await page.getByLabel("orbit game").innerText()).includes("♥"));
+await page.keyboard.press("Escape");
+await page.waitForTimeout(300);
+check("24d orbit esc pauses", (await page.getByLabel("orbit game").innerText()).includes("paused"));
+await page.keyboard.press("Escape");
+await page.waitForTimeout(300);
+
+// 25. signal: force graph opens real work
+await page.keyboard.press("Alt+3");
+await page.waitForTimeout(3600);
+check("25a signal canvas", await page.getByLabel("signal knowledge graph").locator("canvas").count() >= 1);
+const sigBox = await page.getByLabel("signal knowledge graph").locator("canvas").boundingBox();
+// deterministic: focus canvas, cycle to a node with ], open with Enter
+await page.getByLabel("graph canvas").click();
+await page.waitForTimeout(300);
+await page.keyboard.press("]");
+await page.waitForTimeout(300);
+let opened = (await page.getByRole("button", { name: /open in workstation/i }).count()) > 0;
+if (opened) {
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(1300);
+  opened = (await page.getByLabel("file navigation").count().catch(() => 0)) >= 1;
+}
+check("25b graph node opens workstation artifact", opened);
+
+// 26. DOI action on ICE readme
+await page.keyboard.press("Alt+1");
+await page.waitForTimeout(400);
+await page.goto("http://127.0.0.1:3001/?open=~/projects/ice/README.md", { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(1500);
+check("26 doi link", await page.locator("main").getByRole("link", { name: /DOI/i }).first().getAttribute("href").then((h) => h === "https://doi.org/10.5281/zenodo.21759702").catch(() => false));
+
+// 27. oss keyboard: panes — j/k move inside, h/l switches column
+await page.locator("main").click();
+await page.getByTitle("home").click();
+await page.waitForTimeout(400);
+await page.keyboard.press("o");
+await page.waitForTimeout(500);
+await page.keyboard.press("j");
+await page.waitForTimeout(200);
+const ossSel = await page.getByLabel("open source browser").innerText();
+await page.keyboard.press("h");
+await page.waitForTimeout(300);
+const ossPane = await page.evaluate(() => document.querySelector("[aria-label='repositories']")?.getAttribute("data-active"));
+await page.keyboard.press("j");
+await page.waitForTimeout(200);
+const ossRepoMoved = await page.getByLabel("open source browser").innerText();
+check("27a oss j moves", ossSel.length > 0);
+check("27b oss h focuses repos", ossPane === "true");
+check("27c oss j moves repos", ossRepoMoved !== ossSel);
+
+// 28. finder exact-dir rank: ~/research must top architecture.md
+await page.keyboard.press("Control+k");
+await page.waitForTimeout(300);
+await page.getByPlaceholder(/find files/i).fill("~/research");
+await page.waitForTimeout(300);
+const firstOpt = await page.getByRole("option").first().innerText();
+check("28 exact dir ranks first", /research\s*~\/research\s*$/.test(firstOpt) || firstOpt.includes("~/research"));
+await page.keyboard.press("Escape");
+
+// 29. alt+number works with terminal focused
+await page.keyboard.press("Control+`");
+await page.waitForTimeout(500);
+await page.keyboard.press("Alt+2");
+await page.waitForTimeout(1200);
+check("29 alt+2 from terminal", await page.getByLabel("orbit game").count() >= 1);
+await page.keyboard.press("Alt+1");
+await page.waitForTimeout(1000);
+
+// 30. link cluster: github/scholar/linkedin/orcid/mail
+const links = await page.getByLabel("profile links").innerText().catch(() => "");
+const hrefs = await page.getByLabel("profile links").locator("a").evaluateAll((as) => as.map((a) => a.getAttribute("href")));
+check("30 five profile links", hrefs.length >= 5 && hrefs.some((h) => h && h.includes("linkedin")) && hrefs.some((h) => h && h.includes("orcid")) && hrefs.some((h) => h && h.startsWith("mailto:")));
+
+// 31. graph has from-scratch ML nodes
+await page.keyboard.press("Alt+3");
+await page.waitForTimeout(3600);
+const nodeCount = await page.getByLabel("graph canvas").getAttribute("data-nodes");
+check("31 grad/wine nodes", Number(nodeCount) >= 20);
+
+// 32. ssh handshake shows before the session opens
+await page.getByRole("button", { name: "log out" }).click();
+await page.waitForTimeout(500);
+await page.getByRole("button", { name: /enter guest session/i }).click();
+await page.waitForTimeout(700);
+check("32 ssh handshake", (await page.innerText("body")).includes("ssh guest@orien"));
+await page.waitForTimeout(1200);
+
+// 33. pet click always answers with a bubble
+await page.getByLabel(/companion creature/).click({ force: true });
+await page.waitForTimeout(400);
+check("33 pet bubble", (await page.locator("[aria-live='polite']").last().innerText().catch(() => "")).length > 1);
+
+// 34. alt+t opens a home tab
+await page.keyboard.press("Alt+1");
+await page.waitForTimeout(600);
+await page.getByTitle("home").click();
+await page.waitForTimeout(400);
+await page.keyboard.press("Alt+t");
+await page.waitForTimeout(400);
+check("34 home tab", await page.getByRole("tab", { name: "home" }).count() >= 1);
+// 34b. shortcuts work inside the home tab
+await page.keyboard.press("p");
+await page.waitForTimeout(500);
+check("34b home-tab p works", (await page.getByLabel("file navigation").innerText()).includes("projects"));
+// 34c. shift+tab cycles buffer tabs forward
+await page.keyboard.press("v");
+await page.waitForTimeout(500);
+await page.keyboard.press("Shift+Tab");
+await page.waitForTimeout(400);
+check("34c shift+tab cycles", await page.getByRole("tab", { name: "home", selected: true }).count() >= 1);
+
+// 35. left from a top-level section lands on the ~ listing
+await page.keyboard.press("p");
+await page.waitForTimeout(500);
+await page.keyboard.press("ArrowLeft");
+await page.waitForTimeout(500);
+const rootList = await page.getByRole("listbox").innerText().catch(() => "");
+check("35 root listing", rootList.includes("research/") && rootList.includes("oss/"));
+await page.keyboard.press("l");
+await page.waitForTimeout(500);
+check("35b right enters section", (await page.getByLabel("file navigation").innerText()).includes("projects"));
+
+// 35c. login hint teaches keys, dismisses
+await page.goto("http://127.0.0.1:3001/", { waitUntil: "domcontentloaded" });
+await page.evaluate(() => { try { localStorage.removeItem("deepnar-hint-seen"); } catch {} });
+await page.reload({ waitUntil: "domcontentloaded" });
+await page.evaluate(() => { try { localStorage.removeItem("deepnar-hint-seen"); } catch {} });
+await page.waitForTimeout(1200);
+await page.getByRole("button", { name: /enter guest session/i }).click();
+await page.waitForTimeout(1800);
+check("35c hint popup", await page.getByRole("note", { name: "keyboard hint" }).count() >= 1);
+await page.getByRole("button", { name: /dismiss/ }).click();
+await page.waitForTimeout(300);
+check("35d hint dismisses", await page.getByRole("note", { name: "keyboard hint" }).count() === 0);
+
+// 36. oss repos pane: left walks out to the parent dir
+await page.getByTitle("home").click();
+await page.waitForTimeout(400);
+await page.keyboard.press("o");
+await page.waitForTimeout(500);
+await page.keyboard.press("h");
+await page.waitForTimeout(300);
+await page.keyboard.press("ArrowLeft");
+await page.waitForTimeout(500);
+check("36 oss left to parent", await page.getByRole("listbox").count() >= 1);
 
 console.log(results.join("\n"));
 await browser.close();

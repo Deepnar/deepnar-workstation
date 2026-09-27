@@ -42,7 +42,7 @@ export function XTerminal({ sessionId, hidden }: { sessionId: string; hidden: bo
     const el = boxRef.current;
     if (!el || termRef.current) return;
     const st = useShell.getState();
-    const dark = st.theme !== "light";
+    const dark = false;
     const term = new XTerm({
       cursorBlink: true,
       cursorStyle: "block",
@@ -70,6 +70,11 @@ export function XTerminal({ sessionId, hidden }: { sessionId: string; hidden: bo
 
     term.onData((data) => handleData(data, sessionId, term, writeLine, inputRef, histIdxRef));
     term.onBinary(() => {});
+    // let workspace space-switching reach the app (xterm would eat Alt+number)
+    term.attachCustomKeyEventHandler((e) => {
+      if (e.altKey && ["1", "2", "3"].includes(e.key)) return false;
+      return true;
+    });
 
     const onResize = () => {
       try {
@@ -96,7 +101,7 @@ export function XTerminal({ sessionId, hidden }: { sessionId: string; hidden: bo
   // theme follows
   const theme = useShell((s) => s.theme);
   useEffect(() => {
-    if (termRef.current) termRef.current.options.theme = themeOpts(theme !== "light");
+    if (termRef.current) termRef.current.options.theme = themeOpts(false);
   }, [theme]);
 
   // refit when tab becomes visible

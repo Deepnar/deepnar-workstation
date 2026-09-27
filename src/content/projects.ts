@@ -12,7 +12,7 @@ export interface Project {
   status: string;
   blurb: string;
   stack: string[];
-  links: { github: string; arxiv?: string };
+  links: { github: string; arxiv?: string; doi?: string };
   lane?: string[];
   evidence: string[];
   motivation?: string;
@@ -26,17 +26,20 @@ export const projects: Project[] = [
     repo: "Deepnar/ice",
     kind: "solo",
     period: "Jun 2026 — Present",
-    status: "research · manuscript complete, follow-up eval ongoing",
+    status: "research · v3 system line active (paper line: frozen v2)",
     blurb:
       "A local-first memory layer for conversational AI: persistent, structured memory for any OpenAI-compatible model, running entirely on your own hardware.",
     stack: ["Python", "PyTorch", "FastAPI", "PostgreSQL + pgvector", "SQLAlchemy", "Docker", "Ollama"],
-    links: { github: "https://github.com/Deepnar/ice", arxiv: "https://arxiv.org/abs/2609.16730" },
+    links: { github: "https://github.com/Deepnar/ice", arxiv: "https://arxiv.org/abs/2609.16730", doi: "https://doi.org/10.5281/zenodo.21759702" },
     evidence: [
       "Structured episodic, document, procedural and temporal-graph stores behind an OpenAI-compatible proxy.",
       "Pre-flight classifier: multi-head PyTorch head over frozen Qwen3-Embedding-0.6B — 27 labels across topic, intent and context-reliance; calibrated routing decides when retrieval fires at all.",
       "Hybrid retrieval (lexical · vector · graph · procedural · document · timeline) with rank fusion, dedup and bounded token budgets.",
       "LSREP: a longitudinal state-replay protocol for evaluating conversational memory as it evolves over time.",
-      "Frozen v2 manuscript reports a controlled evaluation + matched LongMemEval diagnostic: 1,985 turns · 219 probes · 1,211 observations · 52 checkpoints — including failure cases where ICE trails pure vector-RAG.",
+      "Frozen v2 paper-run: 1,985 turns · 1,211 probes · 50 checkpoints (LSREP replay with evolving ground truth). Tied vector-RAG on answer quality (paired Δ +0.00, 95% CI [−0.07, +0.07]) while injecting 32% fewer fragments; won 30.6% vs 21.2% of blind comparisons.",
+      "Density stress: the unbudgeted baseline failed 94.2% of 154 probes; ICE scored a mean 4.33. Ablation isolated rank fusion as corrective (−0.74 without, +0.82 recovered).",
+      "Tagged v2-paper-eval on GitHub (★3); paper, source, harness and audit public under Apache-2.0; v3 system-repair line in progress.",
+      "LSREP belongs to the v2 line: it replays long conversations turn by turn, rebuilds memory at successive checkpoints, and scores against facts that get superseded mid-run."
     ],
     motivation:
       "Every chat session starts from zero and larger context windows didn't fix it — a window is a buffer, not a memory. The central finding: retrieval quality is governed by what you leave out, not by retrieving more.",
@@ -50,10 +53,11 @@ export const projects: Project[] = [
     period: "Aug — Sep 2026",
     status: "active · self-hosted",
     blurb:
-      "Self-hosted research-to-artifact pipeline: topic or sources in, researched, themed, editable PPTX/DOCX and report out. Docker-first, BYOK or Ollama.",
+      "Academic deck generator: topic in, researched themed .pptx out. A gateway Auto tier (mimo-vision drafts, flash facts) judges output quality; local Ollama supported, BYOK otherwise; Docker-first, self-hostable.",
     stack: ["Node.js", "React/Vite", "Ollama", "SQLite", "Docker"],
     links: { github: "https://github.com/Deepnar/presentation-forge" },
     evidence: [
+      "Tagged v0.1.0 on GitHub (★15); 95 test files, ~790 test cases.",
       "74 slide types · 34 themes with deterministic rendering and schema validation.",
       "Human-approval gates, critique pass and reproducible reports with automated checks.",
       "Local-model support (Ollama) or BYOK providers; no inference bill required.",
@@ -76,6 +80,7 @@ export const projects: Project[] = [
     evidence: [
       "Greedy + OR-Tools CP-SAT solvers under explicit hard constraints and weighted soft-constraint scoring.",
       "Authenticated REST APIs with audit/publishing workflows, shared-resource reservations and cross-timetable safety.",
+      "Exports timetables to PDF/CSV/iCal; ranked candidates with weighted soft-constraint scoring.",
       "Data-driven constraint registry; no post-generation cleanup hacks.",
     ],
     motivation:
@@ -190,7 +195,8 @@ export const projects: Project[] = [
       "REPORT_PERSON1.md + outputs",
     ],
     evidence: [
-      "Person-1 baseline scripts (inspect → baseline → full sweep) with outputs and REPORT_PERSON1.md.",
+      "Person-1 baseline scripts (inspect → baseline → full sweep) with outputs and REPORT_PERSON1.md, on IBM synthetic txn data (accuracy rejected as a metric).",
+      "Locked test @0.24: RF precision 0.784 · recall 0.592 · F1 0.674 · PR-AUC 0.618 (29/49 fraud, 8 FP). LogReg best PR-AUC 0.206 — the linear boundary can't capture fraud interactions.",
       "Teammates ran the tuning (Person 2) and XGBoost/imbalance lanes (Person 3); team ML plan in-repo.",
     ],
   },
@@ -261,7 +267,7 @@ export const projects: Project[] = [
   },
   {
     slug: "movie-ticket-booking",
-    name: "CineBook — movie ticket booking",
+    name: "movie-ticket-booking",
     bucket: "practice",
     repo: "Deepnar/movie-ticket-booking",
     kind: "practice",
@@ -274,7 +280,7 @@ export const projects: Project[] = [
   },
   {
     slug: "hostel-room-allocation-system",
-    name: "ZenHostel — room allocation",
+    name: "hostel-room-allocation-system",
     bucket: "practice",
     repo: "Deepnar/hostel-room-allocation-system",
     kind: "practice",
@@ -335,6 +341,32 @@ export const projects: Project[] = [
     blurb: "Rust practice repository.",
     stack: ["Rust"],
     links: { github: "https://github.com/Deepnar/rust-lab" },
+    evidence: [],
+  },
+  {
+    slug: "ecommerce-client",
+    name: "EcommerceClient",
+    bucket: "practice",
+    repo: "Deepnar/EcommerceClient",
+    kind: "practice",
+    period: "—",
+    status: "practice",
+    blurb: "Static multi-page storefront in plain HTML/CSS/JS: categories, cart, account pages — no framework, no backend.",
+    stack: ["HTML", "CSS", "JavaScript"],
+    links: { github: "https://github.com/Deepnar/EcommerceClient" },
+    evidence: [],
+  },
+  {
+    slug: "cricbuzz-app",
+    name: "CricbuzzApp",
+    bucket: "practice",
+    repo: "Deepnar/CricbuzzApp",
+    kind: "practice",
+    period: "—",
+    status: "practice",
+    blurb: "Cricket match simulation: Java backend plus a standalone interactive frontend for matches, teams and players.",
+    stack: ["Java", "HTML", "CSS", "JavaScript"],
+    links: { github: "https://github.com/Deepnar/CricbuzzApp" },
     evidence: [],
   },
   {

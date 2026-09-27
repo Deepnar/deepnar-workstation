@@ -2,35 +2,6 @@
 
 /* ── deepnar workstation · semantic tokens ───────────────────────── */
 :root {
-  --bg0: #0b0c11;
-  --bg1: #101117;
-  --bg2: #151720;
-  --surface: #1b1e27;
-  --raised: #242831;
-  --raised2: #292d37;
-  --border: #262a36;
-  --border-active: #9ba7e8;
-  --fg: #eceefa;
-  --fg-dim: #d8dcef;
-  --muted: #8b91a5;
-  --muted2: #a0a6b8;
-  --accent: #9ba7e8;
-  --accent-soft: #aeb8f5;
-  --accent-deep: #818cf8;
-  --icy: #6dd6ff;
-  --icy-dim: #7dd3fc;
-  --warm: #f59e72;
-  --warm-deep: #ff9364;
-  --ok: #a6e3a1;
-  --err: #f38ba8;
-  --pet: #7c8aff;
-  --sel-bg: #353749;
-  --wall-a: #141828;
-  --wall-b: #0b0c11;
-  color-scheme: dark;
-}
-
-[data-theme="light"] {
   --bg0: #f4f2ec;
   --bg1: #eceae2;
   --bg2: #e3e1d6;
@@ -80,22 +51,7 @@ body {
 
 /* procedural calm-space backdrop: visible on home / overview */
 .wallpaper {
-  background:
-    radial-gradient(1100px 500px at 75% -10%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 60%),
-    radial-gradient(800px 420px at 12% 110%, color-mix(in srgb, var(--icy) 10%, transparent), transparent 60%),
-    radial-gradient(500px 300px at 88% 88%, color-mix(in srgb, var(--warm) 7%, transparent), transparent 60%),
-    linear-gradient(var(--wall-b), var(--wall-a) 55%, var(--wall-b));
-}
-.stars {
-  background-image: radial-gradient(1px 1px at 12% 22%, var(--muted) 60%, transparent 61%),
-    radial-gradient(1px 1px at 68% 8%, var(--muted) 60%, transparent 61%),
-    radial-gradient(1.5px 1.5px at 84% 34%, var(--fg-dim) 60%, transparent 61%),
-    radial-gradient(1px 1px at 32% 66%, var(--muted) 60%, transparent 61%),
-    radial-gradient(1px 1px at 48% 42%, var(--muted) 60%, transparent 61%),
-    radial-gradient(1.5px 1.5px at 6% 82%, var(--fg-dim) 60%, transparent 61%),
-    radial-gradient(1px 1px at 92% 68%, var(--muted) 60%, transparent 61%),
-    radial-gradient(1px 1px at 56% 88%, var(--muted) 60%, transparent 61%);
-  opacity: 0.5;
+  background: linear-gradient(var(--wall-b), var(--wall-a) 55%, var(--wall-b));
 }
 
 /* panes */
@@ -227,16 +183,9 @@ body {
 
 /* ── V2 tokens ── */
 :root {
-  --bg: #0b0c11;
-  --term-bg: #0d0e14;
-  --app-border: #3a3f5c;
-  --wallpaper: radial-gradient(1200px 600px at 70% -10%, #161a2e 0%, #0b0c11 55%, #06070b 100%);
-}
-[data-theme="light"] {
   --bg: #f4f2ec;
   --term-bg: #eceae0;
   --app-border: #b9bde0;
-  --wallpaper: radial-gradient(1200px 600px at 70% -10%, #dfe2f2 0%, #f4f2ec 60%, #e9e7df 100%);
 }
 
 /* ── V2 motion ── */
@@ -275,18 +224,31 @@ body {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent), 0 8px 32px rgba(0, 0, 0, 0.45);
 }
-[data-theme="light"] .wallpaper-stars {
-  opacity: 0.3;
-}
-.wallpaper-stars {
-  animation: star-drift 90s linear infinite alternate;
-}
-@keyframes star-drift {
-  from { transform: translateX(0); }
-  to { transform: translateX(-0.6%); }
-}
 .pet-jump {
   animation: pet-jump 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ── V3.5 motion primitives: fast 120 · normal 180-240 · panel 260-340 · scene 500-750 ── */
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes grow-y {
+  from { opacity: 0; transform: scaleY(0.55); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes block-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.96); letter-spacing: 0.5em; }
+  to { opacity: 1; transform: none; }
+}
+.tree-kids { transform-origin: top center; animation: grow-y 160ms ease; }
+.logo-block { animation: block-in 480ms cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+.row-in { animation: rise-in 180ms ease backwards; }
+html[data-motion="off"] .tree-kids,
+html[data-motion="off"] .logo-block,
+html[data-motion="off"] .row-in,
+html[data-motion="off"] .app-open {
+  animation: none;
 }
 @keyframes pet-jump {
   0% { transform: translateY(0) scale(1, 1); }
@@ -306,4 +268,17 @@ html[data-motion="off"] *::before,
 html[data-motion="off"] *::after {
   animation: none !important;
   transition: none !important;
+}
+
+/* ── custom JS cursor active: hide the native one (except text contexts) ── */
+html.custom-cursor .cursor-theme, html.custom-cursor .cursor-theme * {
+  cursor: none;
+}
+html.custom-cursor .cursor-theme input, html.custom-cursor .cursor-theme textarea,
+html.custom-cursor .cursor-theme [contenteditable="true"],
+html.custom-cursor .cursor-theme .xterm, html.custom-cursor .cursor-theme .xterm * {
+  cursor: text;
+}
+html.custom-cursor .cursor-theme iframe {
+  cursor: auto;
 }

@@ -89,7 +89,7 @@ export function Settings() {
       <div className="absolute inset-0" style={{ background: "rgba(3,4,8,0.6)" }} onClick={() => toggle("settingsOpen")} />
       <div className="relative border w-full max-w-sm p-5" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
         <div className="text-[11px] uppercase tracking-[0.16em] mb-2" style={{ color: "var(--muted)" }}>settings</div>
-        <div className="text-[11.5px] mb-1" style={{ color: "var(--muted)" }}>theme lives in the top bar (◐) + `theme` command</div>
+        
         {([["motion", "motion + transitions"], ["vimKeys", "vim keys (j/k, gg/G, /)"], ["pet", "companion"], ["sound", "sound effects"], ["ambient", "ambient room tone"]] as const).map(([k, label]) => {
           const on = k === "pet" ? petOn : settings[k as keyof typeof settings];
           return (

@@ -15,9 +15,10 @@ export const metadata: Metadata = {
     description: "Deepesh Sonar's portfolio as an interactive browser workstation: real terminal, local index, actual work inside.",
     type: "website",
   },
+  icons: { icon: "/favicon.svg" },
 };
 
-const THEME_INIT = `(function(){try{var t=localStorage.getItem("deepnar-theme");if(!t){t=window.matchMedia("(prefers-color-scheme: light)").matches?"light":"dark";}document.documentElement.dataset.theme=t;}catch(e){document.documentElement.dataset.theme="dark";}})();`;
+const THEME_INIT = `(function(){try{document.documentElement.dataset.theme="light";}catch(e){}})();`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

@@ -96,9 +96,18 @@ export default function Page() {
           return;
         }
       }
-      // real desktop spaces — never hijack plain number typing
+      // real desktop spaces — Alt+number dives straight into the app
+      if (e.altKey && e.key.toLowerCase() === "t") {
+        e.preventDefault();
+        ensureApp();
+        s.setDesktopWs(1);
+        s.openHomeTab();
+        sound.select();
+        return;
+      }
       if (e.altKey && ["1", "2", "3"].includes(e.key)) {
         e.preventDefault();
+        ensureApp();
         s.setDesktopWs(Number(e.key) as 1 | 2 | 3);
         sound.tick(1);
         return;
@@ -113,6 +122,13 @@ export default function Page() {
         else if (s.contactOpen) s.toggle("contactOpen");
         else if (s.settingsOpen) s.toggle("settingsOpen");
         else if (s.helpOpen) s.toggle("helpOpen");
+        return;
+      }
+      if (e.key === "Tab" && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey
+        && !typing && !inTerm && s.phase === "app" && s.desktopWs === 1 && s.openBuffers.length > 1) {
+        e.preventDefault();
+        s.cycleBuffer(1);
+        sound.tick(1);
         return;
       }
       if (typing || inTerm || s.phase === "boot" || s.phase === "greeter") return;
@@ -135,8 +151,16 @@ export default function Page() {
         focusTerminal();
         return;
       }
+      // buffer open? arrows/backspace step back out to the browser (tabs stay).
+      if (s.phase === "app" && s.desktopWs === 1 && s.mainView === "buffer" && (e.key === "ArrowLeft" || e.key === "Backspace")) {
+        e.preventDefault();
+        if (s.activeBuffer === HOME) { s.focusList(); return; }
+        s.setMainView("browser");
+        s.focusList();
+        return;
+      }
       // home quick actions (single keys, dashboard only)
-      if (s.phase === "app" && s.desktopWs === 1 && s.cwd === HOME && !s.activeBuffer && !typing) {
+      if (s.phase === "app" && s.desktopWs === 1 && (s.mainView === "browser" ? s.cwd === HOME : s.activeBuffer === HOME) && !typing) {
         const map: Record<string, () => void> = {
           f: () => s.toggle("paletteOpen"),
           p: () => s.navTo(`${HOME}/projects`),
@@ -149,7 +173,27 @@ export default function Page() {
         if (map[e.key]) {
           sound.select();
           map[e.key]();
+          s.focusList();
           return;
+        }
+      }
+      // last-resort list nav: if no surface claimed the key (focus sitting on
+      // body/buttons after a mouse click), focus the live list and forward once.
+      if (!e.defaultPrevented && !typing && !e.ctrlKey && !e.metaKey && !e.altKey && s.phase === "app" && s.desktopWs === 1 && s.mainView === "browser"
+        && ["j", "k", "ArrowUp", "ArrowDown", "h", "l", "ArrowLeft", "ArrowRight", "Enter"].includes(e.key)) {
+        const t = e.target as HTMLElement | null;
+        const onControl = t?.closest?.("input, textarea, select, [contenteditable], .xterm, [role='dialog'], [role='tablist']");
+        const onButtonAction = (e.key === "Enter" || e.key === " ") && !!t?.closest?.("button, a");
+        if (!onControl && !onButtonAction) {
+          const el = (document.querySelector("[aria-label='open source browser'] [data-active='true']")
+            ?? document.querySelector("[aria-label='pull requests']")
+            ?? document.querySelector("[role='listbox']")) as HTMLElement | null;
+          if (el && document.activeElement !== el) {
+            e.preventDefault();
+            el.focus();
+            el.dispatchEvent(new KeyboardEvent("keydown", { key: e.key, bubbles: true, cancelable: true }));
+            return;
+          }
         }
       }
       // optional vim keys
@@ -167,7 +211,22 @@ export default function Page() {
       }
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    // mouse back/forward buttons navigate the file browser like a browser
+    const onMouse = (e: MouseEvent) => {
+      const s = useShell.getState();
+      if (s.phase !== "app" || s.desktopWs !== 1) return;
+      const t = e.target as HTMLElement;
+      const typing = t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable
+        || t.classList?.contains("xterm-helper-textarea");
+      if (typing) return;
+      if (e.button === 3) { e.preventDefault(); s.navBack(); s.focusList(); }
+      else if (e.button === 4) { e.preventDefault(); s.navFwd(); s.focusList(); }
+    };
+    window.addEventListener("mousedown", onMouse);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("mousedown", onMouse);
+    };
   }, []);
 
   return (

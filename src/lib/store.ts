@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { HOME } from "@/vfs/vfs";
+import { HOME, findNode } from "@/vfs/vfs";
 
 export type Phase = "boot" | "greeter" | "desktop" | "app";
 export type Mode = "BROWSE" | "TERMINAL" | "COMMAND" | "SEARCH" | "AGENT";
@@ -34,7 +34,7 @@ export interface TermSession {
 
 export interface DockTab {
   id: string;
-  kind: "term" | "agent";
+  kind: "term" | "agent" | "web";
   sessionId?: string;
   title: string;
 }
@@ -60,6 +60,7 @@ interface ShellState {
   // buffers
   openBuffers: string[];
   activeBuffer: string | null;
+  mainView: "browser" | "buffer";
   recent: string[];
   // explorer + sizes
   expanded: string[];
@@ -68,7 +69,10 @@ interface ShellState {
   // dock + terminals
   dockTabs: DockTab[];
   activeDock: string | null;
+  dockVisible: boolean;
   terms: Record<string, TermSession>;
+  listFocusNonce: number;
+  sessionEpoch: number;
   // overlays / mode
   mode: Mode;
   paletteOpen: boolean;
@@ -79,7 +83,7 @@ interface ShellState {
   // pet / theme / settings
   petOn: boolean;
   petMode: PetMode;
-  theme: "dark" | "light";
+  theme: "light";
   settings: Settings;
   toasts: Toast[];
   lastEntity: string | null;
@@ -88,20 +92,30 @@ interface ShellState {
   setPhase: (p: Phase) => void;
   setDesktopWs: (w: 1 | 2 | 3) => void;
   navTo: (path: string) => void;
+  navUp: () => void;
+  navReplace: (path: string) => void;
   navBack: () => void;
   navFwd: () => void;
   setSelected: (p: string | null) => void;
   setPreview: (p: string | null) => void;
   openFile: (path: string, kind: string) => void;
+  openHomeTab: () => void;
+  cycleBuffer: (dir: 1 | -1) => void;
+  homeFiles: boolean;
+  setHomeFiles: (v: boolean) => void;
   closeBuffer: (path: string) => void;
+  setMainView: (v: "browser" | "buffer") => void;
+  focusList: () => void;
+  setDockVisible: (v: boolean) => void;
   setExpanded: (paths: string[]) => void;
   toggleExpand: (path: string) => void;
   ensureVisible: (path: string) => void;
   setExplorerWidth: (n: number) => void;
   setDockWidth: (n: number) => void;
-  openDock: (kind: "term" | "agent") => void;
+  openDock: (kind: "term" | "agent" | "web") => void;
   closeDock: (id: string) => void;
   setActiveDock: (id: string | null) => void;
+  logout: () => void;
   termNew: () => string;
   termAppend: (id: string, lines: TermLine[]) => void;
   termSetCwd: (id: string, cwd: string) => void;
@@ -111,7 +125,7 @@ interface ShellState {
   toggle: (k: "paletteOpen" | "helpOpen" | "contactOpen" | "settingsOpen" | "appMaximized") => void;
   setPet: (on: boolean) => void;
   setPetMode: (m: PetMode) => void;
-  setTheme: (t: "dark" | "light") => void;
+  setTheme: (t: "light") => void;
   setSettings: (s: Partial<Settings>) => void;
   notify: (text: string) => void;
   dismissToast: (id: number) => void;
@@ -169,13 +183,18 @@ export const useShell = create<ShellState>((set) => ({
   preview: null,
   openBuffers: [],
   activeBuffer: null,
+  mainView: "browser",
+  homeFiles: false,
   recent: [],
   expanded: [HOME],
   explorerWidth: 240,
   dockWidth: 380,
   dockTabs: [],
   activeDock: null,
+  dockVisible: false,
   terms: {},
+  listFocusNonce: 0,
+  sessionEpoch: 0,
   mode: "BROWSE",
   paletteOpen: false,
   helpOpen: false,
@@ -184,7 +203,7 @@ export const useShell = create<ShellState>((set) => ({
   appMaximized: true,
   petOn: true,
   petMode: "idle",
-  theme: "dark",
+  theme: "light",
   settings: { motion: true, vimKeys: false, sound: true, ambient: false, volume: 0.35, petRoam: true, petSize: 1 },
   toasts: [],
   lastEntity: null,
@@ -199,35 +218,54 @@ export const useShell = create<ShellState>((set) => ({
       hist.push(path);
       return {
         cwd: path, navHistory: hist.slice(-50), navIndex: Math.min(s.navIndex + 1, 49),
-        selected: null, preview: null,
+        selected: null, preview: null, mainView: "browser", homeFiles: false,
       };
+    }),
+  // up one level — stepping out of a top-level section lands on the ~
+  // listing (projects/research/oss/about + root files), not the dashboard.
+  navUp: () => {
+    const s = useShell.getState();
+    if (s.cwd === HOME) return;
+    const i = s.cwd.lastIndexOf("/");
+    const parent = i <= 0 ? HOME : s.cwd.slice(0, i);
+    s.navTo(parent);
+    if (parent === HOME) s.setHomeFiles(true);
+  },
+  // terminal follow: move cwd WITHOUT pushing history, so the
+  // back button never has to walk through every cd you ever typed.
+  navReplace: (path) =>
+    set((s) => {
+      if (path === s.cwd) return { mainView: "browser" as const };
+      const hist = [...s.navHistory];
+      hist[s.navIndex] = path;
+      return { cwd: path, navHistory: hist, selected: null, preview: null, mainView: "browser" as const };
     }),
   navBack: () =>
     set((s) => {
       if (s.navIndex <= 0) return {};
       const path = s.navHistory[s.navIndex - 1];
-      return { navIndex: s.navIndex - 1, cwd: path, selected: null, preview: null };
+      return { navIndex: s.navIndex - 1, cwd: path, selected: null, preview: null, mainView: "browser" };
     }),
   navFwd: () =>
     set((s) => {
       if (s.navIndex >= s.navHistory.length - 1) return {};
       const path = s.navHistory[s.navIndex + 1];
-      return { navIndex: s.navIndex + 1, cwd: path, selected: null, preview: null };
+      return { navIndex: s.navIndex + 1, cwd: path, selected: null, preview: null, mainView: "browser" };
     }),
   setSelected: (p) => set({ selected: p }),
   setPreview: (p) => set({ preview: p }),
   openFile: (path, kind) =>
     set((s) => {
       if (kind === "dir") {
-        if (path === s.cwd) return {};
+        if (path === s.cwd) return { mainView: "browser" as const };
         const hist = [...s.navHistory.slice(0, s.navIndex + 1), path];
-        return { cwd: path, navHistory: hist.slice(-50), navIndex: Math.min(s.navIndex + 1, 49), expanded: [...new Set([...s.expanded, ...ancestorsOf(path), path])] };
+        return { cwd: path, navHistory: hist.slice(-50), navIndex: Math.min(s.navIndex + 1, 49), expanded: [...new Set([...s.expanded, ...ancestorsOf(path), path])], mainView: "browser" as const };
       }
       const bufs = s.openBuffers.includes(path) ? s.openBuffers : [...s.openBuffers, path].slice(-12);
       const parent = parentOf(path);
       const hist = [...s.navHistory.slice(0, s.navIndex + 1), parent];
       return {
-        openBuffers: bufs, activeBuffer: path,
+        openBuffers: bufs, activeBuffer: path, mainView: "buffer" as const,
         recent: [path, ...s.recent.filter((r) => r !== path)].slice(0, 10),
         cwd: parent, navHistory: hist.slice(-50), navIndex: Math.min(s.navIndex + 1, 49),
         expanded: [...new Set([...s.expanded, ...ancestorsOf(path)])],
@@ -239,8 +277,35 @@ export const useShell = create<ShellState>((set) => ({
       const bufs = s.openBuffers.filter((b) => b !== path);
       const i = s.openBuffers.indexOf(path);
       const next = s.activeBuffer === path ? (bufs[Math.min(i, bufs.length - 1)] ?? null) : s.activeBuffer;
-      return { openBuffers: bufs, activeBuffer: next };
+      // last tab closed → fresh start: home, clean history, browser view.
+      if (bufs.length === 0)
+        return { openBuffers: bufs, activeBuffer: null, mainView: "browser" as const, cwd: HOME, navHistory: [HOME], navIndex: 0, selected: null, preview: null };
+      return { openBuffers: bufs, activeBuffer: next, mainView: next ? s.mainView : ("browser" as const) };
     }),
+  openHomeTab: () =>
+    set((s) => ({
+      openBuffers: s.openBuffers.includes(HOME) ? s.openBuffers : [...s.openBuffers, HOME].slice(-12),
+      activeBuffer: HOME,
+      mainView: "buffer" as const,
+      cwd: HOME,
+      homeFiles: false,
+      selected: null,
+      preview: null,
+      recent: [HOME, ...s.recent.filter((r) => r !== HOME)].slice(0, 10),
+    })),
+  cycleBuffer: (dir) => {
+    const s = useShell.getState();
+    if (s.openBuffers.length < 2) return;
+    const i = Math.max(0, s.openBuffers.indexOf(s.activeBuffer ?? ""));
+    const next = s.openBuffers[(i + dir + s.openBuffers.length) % s.openBuffers.length];
+    if (next === HOME) { s.openHomeTab(); return; }
+    const n = findNode(next);
+    if (n) s.openFile(next, n.kind);
+  },
+  setHomeFiles: (v) => set({ homeFiles: v }),
+  setMainView: (v) => set({ mainView: v }),
+  focusList: () => set((s) => ({ listFocusNonce: s.listFocusNonce + 1 })),
+  setDockVisible: (v) => set({ dockVisible: v }),
   setExpanded: (paths) => set({ expanded: paths }),
   toggleExpand: (path) =>
     set((s) => ({ expanded: s.expanded.includes(path) ? s.expanded.filter((e) => e !== path) : [...s.expanded, path] })),
@@ -264,17 +329,17 @@ export const useShell = create<ShellState>((set) => ({
   },
   openDock: (kind) =>
     set((s) => {
-      if (kind === "agent") {
-        const ex = s.dockTabs.find((t) => t.kind === "agent");
-        if (ex) return { activeDock: ex.id };
+      if (kind === "agent" || kind === "web") {
+        const ex = s.dockTabs.find((t) => t.kind === kind);
+        if (ex) return { activeDock: ex.id, dockVisible: true };
         const id = `dock-${++dockId}`;
-        return { dockTabs: [...s.dockTabs, { id, kind, title: "agent" }], activeDock: id };
+        return { dockTabs: [...s.dockTabs, { id, kind, title: kind }], activeDock: id, dockVisible: true };
       }
       const id = `dock-${++dockId}`;
       const sid = `term-${++termId}`;
       const terms = { ...s.terms, [sid]: { id: sid, cwd: s.cwd, history: [], lines: [{ text: "workstation-shell · type help", kind: "dim" as const }] } };
       const n = s.dockTabs.filter((t) => t.kind === "term").length + 1;
-      return { dockTabs: [...s.dockTabs, { id, kind, sessionId: sid, title: `terminal ${n}` }], activeDock: id, terms };
+      return { dockTabs: [...s.dockTabs, { id, kind, sessionId: sid, title: `terminal ${n}` }], activeDock: id, terms, dockVisible: true };
     }),
   closeDock: (id) =>
     set((s) => {
@@ -285,6 +350,20 @@ export const useShell = create<ShellState>((set) => ({
       return { dockTabs: tabs, activeDock: s.activeDock === id ? (tabs[tabs.length - 1]?.id ?? null) : s.activeDock, terms };
     }),
   setActiveDock: (id) => set({ activeDock: id }),
+  logout: () =>
+    set((s) => ({
+      phase: "greeter",
+      cwd: HOME, navHistory: [HOME], navIndex: 0,
+      selected: null, preview: null,
+      openBuffers: [], activeBuffer: null, mainView: "browser" as const,
+      expanded: [HOME],
+      dockTabs: [], activeDock: null, dockVisible: false, terms: {},
+      mode: "BROWSE" as const,
+      paletteOpen: false, helpOpen: false, contactOpen: false, settingsOpen: false,
+      petMode: "idle" as const,
+      lastEntity: null, lastIntent: null,
+      sessionEpoch: s.sessionEpoch + 1,
+    })),
   termNew: () => {
     const sid = `term-${++termId}`;
     set((s) => ({ terms: { ...s.terms, [sid]: { id: sid, cwd: s.cwd, history: [], lines: [] } } }));
@@ -355,7 +434,8 @@ export const useShell = create<ShellState>((set) => ({
 
 export function hydratePrefs() {
   try {
-    if (document.documentElement.dataset.theme === "light") useShell.setState({ theme: "light" });
+    document.documentElement.dataset.theme = "light";
+    useShell.setState({ theme: "light" });
     if (localStorage.getItem("deepnar-pet") === "off") useShell.setState({ petOn: false });
     useShell.setState({ settings: loadSettings(), explorerWidth: num("deepnar-explorer-w", 240), dockWidth: num("deepnar-dock-w", 380) });
   } catch {

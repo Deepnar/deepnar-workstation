@@ -16,14 +16,26 @@ interface Item {
 }
 
 function fuzzy(q: string, s: string): boolean {
-  q = q.toLowerCase();
-  s = s.toLowerCase();
   let i = 0;
   for (const c of s) {
     if (c === q[i]) i++;
     if (i === q.length) return true;
   }
   return i === q.length;
+}
+
+function rank(q: string, label: string, path: string): number {
+  // lower is better; -1 = no match
+  const ql = q.toLowerCase().trim();
+  const pl = `${label} ${path}`.toLowerCase();
+  const pathl = path.toLowerCase();
+  if (!ql) return 0;
+  if (pathl === ql || pathl === `${ql}/` || `${pathl}/` === ql) return 0; // exact path
+  if (pathl.endsWith(`/${ql}`) || pathl.endsWith(`/${ql}/`)) return 1; // exact final segment
+  const base = pathl.split("/").pop() ?? "";
+  if (base.startsWith(ql.replace(/^~\//, ""))) return 2; // basename prefix
+  if (pathl.includes(ql)) return 3; // path substring
+  return fuzzy(ql, pl) ? 4 : -1; // fuzzy fallback
 }
 
 const catFor = (n: VNode): string => {
@@ -38,8 +50,8 @@ const catFor = (n: VNode): string => {
 function downloadResume() {
   try {
     const a = document.createElement("a");
-    a.href = "/resume/Deepesh_Sonar_CV.pdf";
-    a.download = "Deepesh_Sonar_CV.pdf";
+    a.href = "/resume/Deepesh_Sonar_Resume.pdf";
+    a.download = "Deepesh_Sonar_Resume.pdf";
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -49,7 +61,7 @@ function downloadResume() {
 }
 
 export function Palette() {
-  const { paletteOpen, toggle, navTo, openFile, setTheme, theme } = useShell();
+  const { paletteOpen, toggle, navTo, openFile } = useShell();
   const [q, setQ] = useState("");
   const [idx, setIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -84,7 +96,6 @@ export function Palette() {
         ["help / keybindings", () => s.toggle("helpOpen")],
         ["resume (open pdf)", () => s.openFile(`${HOME}/resume.pdf`, "pdf")],
         ["resume (download)", () => { downloadResume(); s.notify("resume downloaded"); sound.download(); }],
-        [`theme → ${theme === "dark" ? "light" : "dark"}`, () => { s.setTheme(theme === "dark" ? "light" : "dark"); sound.toggle(); }],
         ["pet on/off", () => s.setPet(!s.petOn)],
         ["desktop: workstation", () => { s.setDesktopWs(1); s.setPhase("app"); }],
         ["desktop: orbit", () => { s.setDesktopWs(2); s.setPhase("app"); }],
@@ -96,8 +107,13 @@ export function Palette() {
       const rec = s.recent.slice(0, 4).map((r) => all.find((a) => a.node?.path === r)).filter(Boolean) as Item[];
       return [...rec, ...cmds.slice(0, 6)];
     }
-    return all.filter((a) => fuzzy(q, `${a.label} ${a.path}`)).slice(0, 16);
-  }, [q, theme]);
+    return all
+      .map((a) => ({ a, r: rank(q, a.label, a.node?.path ?? a.path) }))
+      .filter((e) => e.r >= 0)
+      .sort((x, y) => x.r - y.r)
+      .map((e) => e.a)
+      .slice(0, 16);
+  }, [q]);
 
   useEffect(() => setIdx(0), [q]);
   if (!paletteOpen) return null;
@@ -107,7 +123,7 @@ export function Palette() {
     toggle("paletteOpen");
     if (it.run) it.run();
     else if (it.node) {
-      if (it.node.kind === "dir") navTo(it.node.path);
+      if (it.node.kind === "dir") { navTo(it.node.path); useShell.getState().focusList(); }
       else openFile(it.node.path, it.node.kind);
     }
   };

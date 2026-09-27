@@ -74,7 +74,7 @@ export function execCommand(raw: string, cwd: string): { lines: TermLine[]; cwd:
         out("fs:        ls · tree · cd · pwd · cat · open · find · grep"),
         out("buffers:   :e <path> · :bd"),
         out("go:        home · projects · research · oss · about · resume · contact"),
-        out("system:    theme <dark|light> · neofetch · btop · history · clear (c)"),
+        out("system:    neofetch · btop · history · clear (c)"),
         out("agent:     ask <question>  (local index, offline)"),
         out("fun:       fortune · uname -a · man deepnar · pet · radio"),
       ]);
@@ -98,7 +98,7 @@ export function execCommand(raw: string, cwd: string): { lines: TermLine[]; cwd:
       const node = findNode(target);
       if (!node) return bad(`cd: no such directory: ${arg}`);
       if (node.kind !== "dir") return bad(`cd: not a directory: ${arg}`);
-      s.navTo(target); // main browser follows the active terminal
+      s.navReplace(target); // main browser follows the active terminal (no history spam)
       return ok([], target);
     }
     case "pwd":
@@ -172,7 +172,7 @@ export function execCommand(raw: string, cwd: string): { lines: TermLine[]; cwd:
         out("Shell: workstation-shell · Editor: nvim · Terminal: ghostty"),
         out(`Projects: ${main} · Repos: ${(gh as { repoCount: number }).repoCount} · Merged↑: ${(gh as { mergedPRs: number }).mergedPRs} lifetime`),
         out("Research: LSREP (arXiv 2609.16730)"),
-        out(`Uptime: ${Math.max(1, Math.round((Date.now() - BOOT_TIME) / 60000))} min · Theme: ${s.theme}`),
+        out(`Uptime: ${Math.max(1, Math.round((Date.now() - BOOT_TIME) / 60000))} min · Theme: light`),
       ]);
     }
     case "btop": {
@@ -205,13 +205,7 @@ export function execCommand(raw: string, cwd: string): { lines: TermLine[]; cwd:
       s.setSettings({ ambient: !s.settings.ambient, sound: true });
       return ok([out(s.settings.ambient ? "ambient: off." : "ambient: on — quiet room tone. volume in settings.", "dim")]);
     case "theme":
-      if (arg === "dark" || arg === "light") {
-        s.setTheme(arg);
-        sound.toggle();
-        s.notify(`theme → ${arg}`);
-        return ok([out(`theme → ${arg}`)]);
-      }
-      return bad("usage: theme <dark|light>");
+      return ok([out("light only — the workstation retired dark mode.", "dim")]);
     case "resume":
       s.openFile(`${HOME}/resume.pdf`, "pdf");
       return ok([out("opened ~/resume.pdf")]);
@@ -247,7 +241,7 @@ export function execCommand(raw: string, cwd: string): { lines: TermLine[]; cwd:
       if (arg.includes("resume") || arg === "") {
         s.notify("resume downloaded");
         sound.download();
-        return { lines: [out("resume.pdf → downloads (sanitized public CV)")], cwd, action: { type: "download", url: "/resume/Deepesh_Sonar_CV.pdf", filename: "Deepesh_Sonar_CV.pdf" } };
+        return { lines: [out("resume.pdf → downloads (sanitized public CV)")], cwd, action: { type: "download", url: "/resume/Deepesh_Sonar_Resume.pdf", filename: "Deepesh_Sonar_Resume.pdf" } };
       }
       return bad("usage: download resume.pdf");
     case "history":

@@ -3,34 +3,51 @@
 // Workstation: sparse header, resizable explorer / main / utility dock,
 // yazi-like browser, buffer tabs, lualine-like status (no clock, no host).
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, ArrowUp, ExternalLink, Minus, PanelLeft, Plus, Search } from "lucide-react";
+import { createPortal } from "react-dom";
+import { ArrowLeft, ArrowRight, ArrowUp, GraduationCap, Home, Mail, PanelLeft, PanelRight, Plus, Search } from "lucide-react";
+import { GithubIcon } from "./GithubIcon";
 import { Group, Panel, Separator, usePanelRef, type PanelImperativeHandle } from "react-resizable-panels";
 import { useShell } from "@/lib/store";
 import { HOME, ROOT, findNode, listDir, shortPath, type VNode } from "@/vfs/vfs";
 import { FileView, HomeView, OssView, PreviewPane, Row, iconFor } from "./panes";
 import { XTerminal } from "./XTerminal";
 import { Agent } from "./Agent";
-import { Pet } from "@/system/Pet";
+import { WebTab } from "./WebTab";
 import { sound } from "@/audio/engine";
 
 const ICON = 19;
 
-/* ── sparse header: identity · search · github · sidebar · minimize ── */
-function Header({ explorerRef }: { explorerRef: React.RefObject<PanelImperativeHandle | null> }) {
-  const { toggle, setPhase } = useShell();
+/* ── header: [tree] identity ··· search · github · [dock] ──
+   window chrome (minimize/maximize) lives in the outer AppWindow only. */
+function Header() {
+  const { cwd, navTo, navBack, navFwd, navUp, focusList, toggle, setPhase } = useShell();
   const btn = "flex items-center justify-center w-9 h-9 hover:bg-[var(--sel-bg)] shrink-0";
   return (
-    <header className="flex items-center gap-1 px-2 py-1 border-b shrink-0" style={{ borderColor: "var(--border)" }} aria-label="workstation header">
-      <span className="flex items-center gap-2 px-2 text-[13px] font-bold" style={{ color: "var(--fg)" }}>
-        <span style={{ color: "var(--accent-soft)" }}>◈</span> workstation
-      </span>
+    <header className="flex items-center gap-1 px-2 py-1 border-b shrink-0" style={{ borderColor: "var(--border)" }} aria-label="file navigation">
+      <NavBtn title="back" onClick={() => { navBack(); focusList(); }}><ArrowLeft size={15} /></NavBtn>
+      <NavBtn title="forward" onClick={() => { navFwd(); focusList(); }}><ArrowRight size={15} /></NavBtn>
+      <NavBtn title="parent" onClick={() => { navUp(); sound.tick(-1); focusList(); }}><ArrowUp size={15} /></NavBtn>
+      <NavBtn title="home" onClick={() => { navTo(HOME); sound.nav(); focusList(); }}><Home size={15} /></NavBtn>
+      <span className="ml-1 truncate text-[12px]" style={{ color: "var(--icy)" }}>{shortPath(cwd)}</span>
       <span className="flex-1" />
       <button className={btn} title="search (ctrl+k)" aria-label="search" onClick={() => { sound.palette(); toggle("paletteOpen"); }}>
         <Search size={ICON} style={{ color: "var(--fg-dim)" }} />
       </button>
-      <a className={btn} title="github profile" aria-label="github profile" href="https://github.com/Deepnar" target="_blank" rel="noreferrer">
-        <ExternalLink size={ICON} style={{ color: "var(--fg-dim)" }} />
-      </a>
+      <span className="w-px h-5 mx-1 shrink-0" style={{ background: "var(--border)" }} aria-hidden />
+      <button className={btn} title="hide to desktop" aria-label="minimize"
+        onClick={() => { sound.appClose(); setPhase("desktop"); }}>
+        <span aria-hidden style={{ color: "var(--fg-dim)", fontSize: 19, lineHeight: 1 }}>–</span>
+      </button>
+    </header>
+  );
+}
+
+/* ── tabnav: arrows/home + buffer tabs + crumb in ONE bar ── */
+function TabNav({ explorerRef }: { explorerRef: React.RefObject<PanelImperativeHandle | null> }) {
+  const { dockVisible, setDockVisible, openBuffers, activeBuffer, openFile, closeBuffer } = useShell();
+  const btn = "p-1.5 hover:text-[var(--fg)] shrink-0";
+  return (
+    <div className="flex items-center gap-0.5 pl-1 pr-2 py-[3px] border-b text-[12px] shrink-0 min-w-0" style={{ borderColor: "var(--border)" }} aria-label="buffer tabs">
       <button
         className={btn} title="toggle file tree" aria-label="toggle file tree"
         onClick={() => {
@@ -40,31 +57,21 @@ function Header({ explorerRef }: { explorerRef: React.RefObject<PanelImperativeH
           else p.collapse();
           sound.toggle();
         }}
+        style={{ color: "var(--fg-dim)" }}
       >
-        <PanelLeft size={ICON} style={{ color: "var(--fg-dim)" }} />
+        <PanelLeft size={15} />
       </button>
-      <button className={btn} title="minimize to desktop" aria-label="minimize to desktop"
-        onClick={() => { sound.appClose(); setPhase("desktop"); }}>
-        <Minus size={ICON} style={{ color: "var(--fg-dim)" }} />
-      </button>
-    </header>
-  );
-}
-
-/* ── buffer tabs: click · middle-click · × ── */
-function BufferLine() {
-  const { openBuffers, activeBuffer, openFile, closeBuffer } = useShell();
-  if (!openBuffers.length) return null;
-  return (
-    <div className="flex items-center border-b overflow-x-auto shrink-0" style={{ borderColor: "var(--border)" }} role="tablist" aria-label="buffers">
+      <span className="w-px h-5 mx-1 shrink-0" style={{ background: "var(--border)" }} aria-hidden />
+      {openBuffers.length > 0 && (
+      <div className="flex items-center overflow-x-auto shrink min-w-0" role="tablist" aria-label="buffers">
       {openBuffers.map((b) => {
         const active = b === activeBuffer;
-        const name = b.split("/").pop() ?? b;
+        const name = b === HOME ? "home" : b.split("/").pop() ?? b;
         const node = findNode(b);
         return (
           <div
             key={b} role="tab" aria-selected={active}
-            onClick={() => node && openFile(b, node.kind)}
+            onClick={() => { if (b === HOME) useShell.getState().openHomeTab(); else if (node) openFile(b, node.kind); }}
             onMouseDown={(e) => {
               if (e.button === 1) {
                 e.preventDefault();
@@ -86,6 +93,14 @@ function BufferLine() {
           </div>
         );
       })}
+      </div>
+      )}
+      <span className="flex-1" />
+      <button className={btn} title="toggle utility dock" aria-label="toggle utility dock" aria-pressed={dockVisible}
+        onClick={() => { setDockVisible(!dockVisible); sound.toggle(); }}
+        style={{ color: dockVisible ? "var(--accent-soft)" : "var(--fg-dim)" }}>
+        <PanelRight size={15} />
+      </button>
     </div>
   );
 }
@@ -124,19 +139,23 @@ function TreeRow({ node, depth }: { node: VNode; depth: number }) {
       <div
         className="w-full flex items-center text-left truncate py-[4px] pr-2 text-[12px] cursor-pointer"
         style={{ paddingLeft: 10 + depth * 12, background: isActive && !isOpen ? "var(--sel-bg)" : "transparent", color: cwd === node.path || cwd.startsWith(node.path + "/") ? "var(--fg)" : "var(--muted)" }}
-        onClick={() => { sound.nav(); navTo(node.path); }}
+        onClick={() => { sound.nav(); navTo(node.path); useShell.getState().focusList(); }}
       >
         <button
           aria-label={`${isOpen ? "collapse" : "expand"} ${node.name}`}
-          className="shrink-0 w-4 text-center hover:text-[var(--fg)]"
-          style={{ color: "var(--icy)" }}
+          className="shrink-0 w-5 text-center text-[13px] font-bold hover:text-[var(--fg)] transition-transform duration-150"
+          style={{ color: "var(--accent-soft)", transform: isOpen ? "none" : "translateX(1px)" }}
           onClick={(e) => { e.stopPropagation(); toggleExpand(node.path); sound.tick(isOpen ? -1 : 1); }}
         >
-          {isOpen ? "▾" : "▸"}
+          {isOpen ? "▼" : "▶"}
         </button>
         <span className="truncate">{node.name}/</span>
       </div>
-      {isOpen && (node.children ?? []).map((c) => <TreeRow key={c.path} node={c} depth={depth + 1} />)}
+      {isOpen && (
+        <div className="tree-kids">
+          {(node.children ?? []).map((c) => <TreeRow key={c.path} node={c} depth={depth + 1} />)}
+        </div>
+      )}
     </div>
   );
 }
@@ -150,30 +169,27 @@ function Explorer() {
   );
 }
 
-/* ── yazi browser: list | preview, back/fwd/up, keyboard ── */
-function NavBar() {
-  const { cwd, navTo, navBack, navFwd } = useShell();
-  const up = () => {
-    if (cwd === HOME) return;
-    const i = cwd.lastIndexOf("/");
-    navTo(i <= 0 ? HOME : cwd.slice(0, i));
-    sound.tick(-1);
-  };
-  return (
-    <div className="flex items-center gap-0.5 px-2 py-[5px] border-b text-[12px] shrink-0" style={{ borderColor: "var(--border)" }} aria-label="file navigation">
-      <NavBtn title="back" onClick={navBack}><ArrowLeft size={15} /></NavBtn>
-      <NavBtn title="forward" onClick={navFwd}><ArrowRight size={15} /></NavBtn>
-      <NavBtn title="parent" onClick={up}><ArrowUp size={15} /></NavBtn>
-      <span className="ml-1 truncate" style={{ color: "var(--icy)" }}>{shortPath(cwd)}</span>
-    </div>
-  );
-}
+/* ── yazi browser: list | preview, keyboard (nav lives in TabNav) ── */
 
 function Browser() {
-  const { cwd, navTo, selected, setSelected, openFile } = useShell();
+  const { cwd, navTo, navUp, selected, setSelected, openFile, listFocusNonce } = useShell();
   const nodes = useMemo(() => listDir(cwd), [cwd]);
   const selIdx = Math.max(0, nodes.findIndex((n) => n.path === (selected ?? previewDefault(nodes))));
   const listRef = useRef<HTMLDivElement>(null);
+
+  // auto-focus the listing after navigation settles — but never steal
+  // focus from agent input, xterm, finder, or forms.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const el = document.activeElement as HTMLElement | null;
+      const tag = el?.tagName ?? "";
+      const busy = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el?.isContentEditable
+        || el?.classList?.contains("xterm-helper-textarea")
+        || el?.closest?.('[role="dialog"]');
+      if (!busy) listRef.current?.focus({ preventScroll: true });
+    }, 60);
+    return () => clearTimeout(t);
+  }, [cwd, listFocusNonce]);
 
   function previewDefault(ns: VNode[]): string | null {
     return ns[0]?.path ?? null;
@@ -207,9 +223,7 @@ function Browser() {
   };
 
   const up = () => {
-    if (cwd === HOME) return;
-    const i = cwd.lastIndexOf("/");
-    navTo(i <= 0 ? HOME : cwd.slice(0, i));
+    navUp();
     sound.tick(-1);
   };
 
@@ -222,17 +236,20 @@ function Browser() {
           <div
             ref={listRef} tabIndex={0} role="listbox" aria-label={`directory ${shortPath(cwd)}`}
             className="h-full overflow-auto min-h-0 py-1 outline-none"
+            onClick={() => listRef.current?.focus({ preventScroll: true })}
             onKeyDown={(e) => {
+              if (e.ctrlKey || e.metaKey || e.altKey) return;
               const n = nodes[selIdx];
-              if (e.key === "j" || e.key === "ArrowDown") { e.preventDefault(); move(1); }
-              else if (e.key === "k" || e.key === "ArrowUp") { e.preventDefault(); move(-1); }
-              else if (e.key === "Enter" && n) { e.preventDefault(); activate(n); }
-              else if ((e.key === "h" || e.key === "ArrowLeft")) { e.preventDefault(); up(); }
-              else if ((e.key === "l" || e.key === "ArrowRight") && n) { e.preventDefault(); activate(n); }
+              if (e.key === "j" || e.key === "ArrowDown") { e.preventDefault(); e.stopPropagation(); move(1); }
+              else if (e.key === "k" || e.key === "ArrowUp") { e.preventDefault(); e.stopPropagation(); move(-1); }
+              else if (e.key === "Enter" && n) { e.preventDefault(); e.stopPropagation(); activate(n); }
+              else if ((e.key === "h" || e.key === "ArrowLeft")) { e.preventDefault(); e.stopPropagation(); up(); }
+              else if ((e.key === "l" || e.key === "ArrowRight") && n) { e.preventDefault(); e.stopPropagation(); activate(n); }
             }}
           >
-            {nodes.map((n) => (
-              <div key={n.path} role="option" aria-selected={n.path === (selected ?? nodes[selIdx]?.path)} onDoubleClick={() => activate(n)}>
+            {nodes.map((n, i) => (
+              <div key={n.path} role="option" aria-selected={n.path === (selected ?? nodes[selIdx]?.path)} onDoubleClick={() => activate(n)}
+                className="row-in" style={{ animationDelay: `${Math.min(i, 12) * 15}ms` }}>
                 <Row active={n.path === (selected ?? nodes[selIdx]?.path)} hint={hint(n)} onPick={() => setSelected(n.path)} onOpen={() => choose(n)}>
                   <span className="flex gap-2 items-baseline">
                     <span style={{ color: "var(--icy)" }}>{iconFor(n)}</span>
@@ -264,67 +281,110 @@ function NavBtn({ children, title, onClick }: { children: React.ReactNode; title
 }
 
 function Main() {
-  const { cwd, activeBuffer } = useShell();
-  if (activeBuffer) {
+  const { cwd, activeBuffer, mainView, homeFiles } = useShell();
+  if (mainView === "buffer" && activeBuffer) {
+    if (activeBuffer === HOME) return <HomeView />;
     const node = findNode(activeBuffer);
     if (node && node.kind !== "dir") return <FileView node={node} />;
   }
-  if (cwd === HOME) return <HomeView />;
+  if (cwd === HOME && !homeFiles) return <HomeView />;
   if (cwd === `${HOME}/oss`) return <OssView />;
   return <Browser />;
 }
 
-/* ── right utility dock: terminal tabs + agent ── */
+/* ── right utility dock: terminal tabs + agent + web.
+   Visibility (header toggle) never destroys sessions or history. */
 function Dock() {
   const { dockTabs, activeDock, setActiveDock, closeDock, openDock, terms } = useShell();
   const [plus, setPlus] = useState(false);
-  if (!dockTabs.length) return null;
-  const active = dockTabs.find((t) => t.id === activeDock) ?? dockTabs[0];
+  const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
+  const plusRef = useRef<HTMLButtonElement>(null);
+  if (!dockTabs.length) {
+    return (
+      <section aria-label="utility dock" className="h-full flex flex-col min-h-0 border-l" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+        <div className="px-3 pt-2 pb-1 text-[10.5px] uppercase tracking-[0.16em]" style={{ color: "var(--muted)" }}>utility dock</div>
+        <div className="flex-1 flex flex-col items-stretch justify-center gap-1 p-3">
+          {([["term", "new terminal", "shell · files · git"], ["agent", "agent", "ask about the work"], ["web", "web lookup", "google · chatgpt · github"]] as const).map(([kind, label, hint]) => (
+            <button key={kind} onClick={() => { openDock(kind); sound.select(); }}
+              className="text-left px-3 py-2 border hover:bg-[var(--sel-bg)]" style={{ borderColor: "var(--border)" }}>
+              <div className="text-[12.5px]" style={{ color: "var(--fg)" }}>{label}</div>
+              <div className="text-[11px]" style={{ color: "var(--muted)" }}>{hint}</div>
+            </button>
+          ))}
+        </div>
+      </section>
+    );
+  }
+    const active = dockTabs.find((t) => t.id === activeDock) ?? dockTabs[0];
+  const openPlus = () => {
+    const r = plusRef.current?.getBoundingClientRect();
+    setMenuAt(r ? { x: Math.min(r.left, window.innerWidth - 190), y: r.bottom + 4 } : null);
+    setPlus(true);
+    sound.palette();
+  };
+  const pick = (kind: "term" | "agent" | "web") => {
+    openDock(kind);
+    setPlus(false);
+    sound.select();
+  };
   return (
     <section aria-label="utility dock" className="h-full flex flex-col min-h-0 border-l" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-      <div className="flex items-center border-b overflow-x-auto shrink-0" style={{ borderColor: "var(--border)" }} role="tablist" aria-label="utility tabs">
-        {dockTabs.map((t) => {
-          const on = t.id === active.id;
-          return (
-            <div
-              key={t.id} role="tab" aria-selected={on}
-              onClick={() => { setActiveDock(t.id); sound.select(); }}
-              onMouseDown={(e) => {
-                if (e.button === 1) {
-                  e.preventDefault();
-                  sound.fileClose();
-                  closeDock(t.id);
-                }
-              }}
-              className="flex items-center gap-1.5 px-3 py-[7px] text-[12px] whitespace-nowrap cursor-pointer border-r"
-              style={{
-                borderColor: "var(--border)",
-                background: on ? "var(--sel-bg)" : "transparent",
-                color: on ? "var(--accent-soft)" : "var(--muted)",
-                boxShadow: on ? "inset 0 2px 0 var(--accent)" : "none",
-              }}
-            >
-              <span>{t.title}</span>
-              <button aria-label={`close ${t.title}`} className="hover:text-[var(--err)] px-0.5"
-                onClick={(e) => { e.stopPropagation(); sound.fileClose(); closeDock(t.id); }}>✕</button>
-            </div>
-          );
-        })}
-        <div className="relative">
-          <button aria-label="new utility tab" title="new terminal / agent" className="px-2.5 py-[7px] hover:bg-[var(--sel-bg)]" style={{ color: "var(--fg-dim)" }}
-            onClick={() => setPlus((v) => !v)}>
-            <Plus size={14} />
-          </button>
-          {plus && (
-            <div className="absolute right-0 top-full z-30 border shadow-xl text-[12.5px] min-w-40" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-              <button className="block w-full text-left px-3 py-2 hover:bg-[var(--sel-bg)]" style={{ color: "var(--fg-dim)" }}
-                onClick={() => { openDock("term"); setPlus(false); sound.select(); }}>new terminal</button>
-              <button className="block w-full text-left px-3 py-2 hover:bg-[var(--sel-bg)]" style={{ color: "var(--fg-dim)" }}
-                onClick={() => { openDock("agent"); setPlus(false); sound.select(); }}>agent</button>
-            </div>
-          )}
+      <div className="flex items-center border-b shrink-0" style={{ borderColor: "var(--border)" }} role="tablist" aria-label="utility tabs">
+        <div className="flex items-center overflow-x-auto flex-1 min-w-0">
+          {dockTabs.map((t) => {
+            const on = t.id === active.id;
+            return (
+              <div
+                key={t.id} role="tab" aria-selected={on}
+                onClick={() => { setActiveDock(t.id); sound.select(); }}
+                onMouseDown={(e) => {
+                  if (e.button === 1) {
+                    e.preventDefault();
+                    sound.fileClose();
+                    closeDock(t.id);
+                  }
+                }}
+                className="flex items-center gap-1.5 px-3 py-[7px] text-[12px] whitespace-nowrap cursor-pointer border-r"
+                style={{
+                  borderColor: "var(--border)",
+                  background: on ? "var(--sel-bg)" : "transparent",
+                  color: on ? "var(--accent-soft)" : "var(--muted)",
+                  boxShadow: on ? "inset 0 2px 0 var(--accent)" : "none",
+                }}
+              >
+                <span>{t.title}</span>
+                <button aria-label={`close ${t.title}`} className="hover:text-[var(--err)] px-0.5"
+                  onClick={(e) => { e.stopPropagation(); sound.fileClose(); closeDock(t.id); }}>✕</button>
+              </div>
+            );
+          })}
         </div>
+        <button ref={plusRef} aria-label="new utility tab" aria-haspopup="menu" aria-expanded={plus}
+          title="new terminal / agent / web" className="px-2.5 py-[7px] hover:bg-[var(--sel-bg)] shrink-0" style={{ color: "var(--fg-dim)" }}
+          onClick={() => (plus ? setPlus(false) : openPlus())}>
+          <Plus size={14} />
+        </button>
       </div>
+      {plus && menuAt && createPortal(
+        <>
+          <div className="fixed inset-0 z-[70]" onClick={() => setPlus(false)} aria-hidden />
+          <div role="menu" aria-label="new utility" className="fixed z-[71] border shadow-xl text-[12.5px] min-w-44 py-1"
+            style={{ left: menuAt.x, top: menuAt.y, borderColor: "var(--border)", background: "var(--surface)" }}>
+            <button role="menuitem" className="block w-full text-left px-3 py-2 hover:bg-[var(--sel-bg)]" style={{ color: "var(--fg-dim)" }}
+              onClick={() => pick("term")}>new terminal</button>
+            <button role="menuitem" className="block w-full text-left px-3 py-2 hover:bg-[var(--sel-bg)]" style={{ color: "var(--fg-dim)" }}
+              onClick={() => pick("agent")}>agent</button>
+            <button role="menuitem" className="block w-full text-left px-3 py-2 hover:bg-[var(--sel-bg)]" style={{ color: "var(--fg-dim)" }}
+              onClick={() => pick("web")}>web</button>
+            <div className="border-t my-1" style={{ borderColor: "var(--border)" }} />
+            <button role="menuitem" className="block w-full text-left px-3 py-2 hover:bg-[var(--sel-bg)]" style={{ color: "var(--fg-dim)" }}
+              onClick={() => { setPlus(false); window.open("https://www.google.com/", "_blank", "noopener,noreferrer"); }}>google ↗</button>
+            <button role="menuitem" className="block w-full text-left px-3 py-2 hover:bg-[var(--sel-bg)]" style={{ color: "var(--fg-dim)" }}
+              onClick={() => { setPlus(false); window.open("https://chat.openai.com/", "_blank", "noopener,noreferrer"); }}>chatgpt ↗</button>
+          </div>
+        </>,
+        document.body
+      )}
       <div className="flex-1 min-h-0 relative">
         {dockTabs.filter((t) => t.kind === "term" && t.sessionId).map((t) => (
           <div key={t.id} className="absolute inset-0" style={{ visibility: t.id === active.id ? "visible" : "hidden" }}>
@@ -336,6 +396,11 @@ function Dock() {
             <Agent hidden={active.kind !== "agent"} />
           </div>
         )}
+        {dockTabs.some((t) => t.kind === "web") && (
+          <div className="absolute inset-0 overflow-hidden" style={{ visibility: active.kind === "web" ? "visible" : "hidden" }}>
+            <WebTab />
+          </div>
+        )}
       </div>
       <div className="hidden">{Object.keys(terms).length}</div>
     </section>
@@ -344,7 +409,7 @@ function Dock() {
 
 /* ── statusline: mode · location · branch · buffer · dock — no clock, no host ── */
 function Statusline() {
-  const { mode, cwd, activeBuffer, toggle, dockTabs, activeDock, terms } = useShell();
+  const { mode, cwd, activeBuffer, dockTabs, activeDock, terms } = useShell();
   const buf = activeBuffer?.split("/").pop() ?? "—";
   const activeTab = dockTabs.find((t) => t.id === activeDock);
   const dockState = activeTab
@@ -354,15 +419,33 @@ function Statusline() {
     : "—";
   return (
     <footer className="flex items-center gap-0 text-[11.5px] border-t shrink-0 overflow-x-auto" style={{ borderColor: "var(--border)", background: "var(--surface)" }} aria-label="status">
-      <span className="px-2.5 py-[5px] font-bold shrink-0" style={{ background: "var(--accent)", color: "#0b0c11" }}>{mode}</span>
+      <span className="px-2.5 py-[5px] font-bold shrink-0 whitespace-nowrap" style={{ background: "var(--accent)", color: "#0b0c11" }}>{mode}</span>
       <span className="px-2.5 py-[5px] shrink-0 truncate" style={{ color: "var(--icy)" }}>{shortPath(cwd)}</span>
       <span className="px-2 py-[5px] shrink-0 hidden sm:inline" style={{ color: "var(--muted)" }}>main</span>
       <span className="px-2 py-[5px] shrink-0 hidden md:inline truncate" style={{ color: "var(--muted)" }}>{buf}</span>
       <span className="ml-auto" />
       <span className="px-2 py-[5px] shrink-0 hidden lg:inline" style={{ color: "var(--muted)" }}>{dockState}</span>
-      <Pet anchor="status" />
-      <button className="px-2.5 py-[5px] shrink-0 hover:bg-[var(--sel-bg)]" style={{ color: "var(--accent-soft)" }}
-        onClick={() => toggle("contactOpen")}>contact</button>
+      <span className="flex items-center gap-0.5 px-1.5 shrink-0" aria-label="profile links">
+        <a className="px-1.5 py-[5px] hover:bg-[var(--sel-bg)]" title="GitHub · @Deepnar" aria-label="github profile" href="https://github.com/Deepnar" target="_blank" rel="noreferrer">
+          <span style={{ color: "var(--fg-dim)", display: "inline-flex", verticalAlign: "-2px" }}><GithubIcon size={16} /></span>
+        </a>
+        <a className="px-1.5 py-[5px] hover:bg-[var(--sel-bg)]" title="Google Scholar" aria-label="google scholar profile" href="https://scholar.google.com/citations?user=LIHKqCAAAAAJ&hl=en" target="_blank" rel="noreferrer">
+          <span style={{ color: "var(--fg-dim)", display: "inline-flex", verticalAlign: "-2px" }}><GraduationCap size={16} /></span>
+        </a>
+        <a className="px-1.5 py-[5px] hover:bg-[var(--sel-bg)]" title="LinkedIn · Deepesh Sonar" aria-label="linkedin profile" href="https://www.linkedin.com/in/deepeshsonar/" target="_blank" rel="noreferrer">
+          <span style={{ display: "inline-flex", verticalAlign: "-2px" }} aria-hidden>
+            <svg width="16" height="16" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" fill="none" stroke="#0a66c2" strokeWidth="2.5" /><text x="12" y="17" textAnchor="middle" fontSize="11" fontWeight="bold" fill="#0a66c2" fontFamily="monospace">in</text></svg>
+          </span>
+        </a>
+        <a className="px-1.5 py-[5px] hover:bg-[var(--sel-bg)]" title="ORCID · 0009-0008-1762-4246" aria-label="orcid profile" href="https://orcid.org/0009-0008-1762-4246" target="_blank" rel="noreferrer">
+          <span style={{ display: "inline-flex", verticalAlign: "-2px" }} aria-hidden>
+            <svg width="16" height="16" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="#a6ce39" strokeWidth="2.5" /><text x="12" y="16" textAnchor="middle" fontSize="10" fontWeight="bold" fill="#a6ce39" fontFamily="monospace">iD</text></svg>
+          </span>
+        </a>
+        <a className="px-1.5 py-[5px] hover:bg-[var(--sel-bg)]" title="email · 18deepnar@gmail.com" aria-label="email deepesh" href="mailto:18deepnar@gmail.com">
+          <span style={{ color: "var(--fg-dim)", display: "inline-flex", verticalAlign: "-2px" }}><Mail size={16} /></span>
+        </a>
+      </span>
     </footer>
   );
 }
@@ -370,7 +453,13 @@ function Statusline() {
 /* ── workstation ── */
 export function Workstation() {
   const explorerPanel = usePanelRef();
-  const dockTabs = useShell((s) => s.dockTabs);
+  const dockVisible = useShell((s) => s.dockVisible);
+  // panel resize handles must never take keyboard focus — arrows belong to lists
+  useEffect(() => {
+    document.querySelectorAll("[role='separator']").forEach((el) => {
+      (el as HTMLElement).tabIndex = -1;
+    });
+  }, []);
   const layout = (() => {
     try {
       const raw = localStorage.getItem("deepnar-ws-layout");
@@ -381,8 +470,8 @@ export function Workstation() {
   })();
   return (
     <div className="flex-1 flex flex-col min-h-0 min-w-0">
-      <Header explorerRef={explorerPanel} />
-      <BufferLine />
+      <Header />
+      <TabNav explorerRef={explorerPanel} />
       <div className="flex-1 min-h-0">
         <Group
           orientation="horizontal"
@@ -397,13 +486,12 @@ export function Workstation() {
           <Separator className="w-[5px] cursor-col-resize shrink-0 hover:bg-[var(--sel-bg)]" aria-label="resize explorer" />
           <Panel id="main" defaultSize="56" minSize="30">
             <div className="h-full flex flex-col min-h-0">
-              <NavBar />
               <main id="main" className="flex-1 min-h-0 min-w-0 overflow-auto" aria-label="workspace">
                 <Main />
               </main>
             </div>
           </Panel>
-          {dockTabs.length > 0 && (
+          {dockVisible && (
             <>
               <Separator className="w-[5px] cursor-col-resize shrink-0 hover:bg-[var(--sel-bg)]" aria-label="resize utility dock" />
               <Panel id="dock" defaultSize="25" minSize="18" maxSize="55">

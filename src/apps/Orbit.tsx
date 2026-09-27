@@ -1,19 +1,32 @@
 "use client";
 
-// ORBIT — a 60-second desktop toy. Steer the mote, dodge asteroids,
-// catch signals. Arrows/WASD + Space (brake), touch drag. Canvas only.
+// ORBIT — an endless desktop toy. Steer the mote, dodge asteroids,
+// catch signals. 5 hull hits and you are out — score survives hits.
+// Arrows/WASD + Space (brake), Esc pauses, touch drag. Canvas only.
 import { useEffect, useRef, useState } from "react";
 import { sound } from "@/audio/engine";
+import { useShell } from "@/lib/store";
 
 interface Body { x: number; y: number; vx: number; vy: number; r: number; kind: "rock" | "signal"; hue: number }
+
+interface Particle { x: number; y: number; vx: number; vy: number; life: number; max: number }
+interface Pop { x: number; y: number; text: string; life: number }
+interface Ring { x: number; y: number; r: number; life: number }
 
 export function Orbit() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [score, setScore] = useState(0);
   const [best, setBest] = useState(0);
-  const [time, setTime] = useState(60);
+  const [lives, setLives] = useState(5);
   const [over, setOver] = useState(false);
-  const stateRef = useRef({ bodies: [] as Body[], px: 0, py: 0, vx: 0, vy: 0, keys: new Set<string>(), t: 60, score: 0, alive: true });
+  const [count, setCount] = useState(3);
+  const [paused, setPaused] = useState(false);
+  const pausedRef = useRef(false);
+  const stateRef = useRef({
+    bodies: [] as Body[], particles: [] as Particle[], pops: [] as Pop[], rings: [] as Ring[],
+    px: 0, py: 0, vx: 0, vy: 0, angle: -Math.PI / 2, keys: new Set<string>(),
+    score: 0, lives: 5, invuln: 0, alive: true, shake: 0, thrusting: false, braking: false, countdown: 3,
+  });
 
   useEffect(() => {
     try {
@@ -34,12 +47,21 @@ export function Orbit() {
     st.px = W / 2;
     st.py = H / 2;
     st.bodies = [];
-    st.t = 60;
+    st.particles = [];
+    st.pops = [];
+    st.rings = [];
     st.score = 0;
+    st.lives = 5;
+    st.invuln = 0;
     st.alive = true;
+    st.shake = 0;
+    st.countdown = 3;
+    pausedRef.current = false;
     setOver(false);
     setScore(0);
-    setTime(60);
+    setLives(5);
+    setPaused(false);
+    setCount(3);
 
     const spawn = () => {
       const edge = Math.floor(Math.random() * 4);
@@ -61,6 +83,13 @@ export function Orbit() {
 
     const keys = st.keys;
     const down = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        pausedRef.current = !pausedRef.current;
+        setPaused(pausedRef.current);
+        sound.toggle();
+        return;
+      }
       if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(e.key)) e.preventDefault();
       keys.add(e.key.toLowerCase());
     };
@@ -71,36 +100,47 @@ export function Orbit() {
     let last = performance.now();
     let acc = 0;
     let raf = 0;
+    let countAcc = 0;
     const loop = (now: number) => {
       const dt = Math.min(50, now - last);
       last = now;
       acc += dt;
-      if (st.alive) {
-        st.t -= dt / 1000;
-        if (st.t <= 0) {
-          st.t = 0;
-          st.alive = false;
-          setOver(true);
-          setBest((b) => {
-            const nb = Math.max(b, st.score);
-            try {
-              localStorage.setItem("deepnar-orbit-best", String(nb));
-            } catch {
-              /* noop */
-            }
-            return nb;
-          });
+      // countdown: the ship holds while the clock ticks 3·2·1
+      if (st.countdown > 0) {
+        countAcc += dt;
+        if (countAcc > 750) {
+          countAcc = 0;
+          st.countdown -= 1;
+          setCount(st.countdown);
+          sound.nav();
         }
-        setTime(Math.ceil(st.t));
       }
+      if (pausedRef.current) {
+        raf = requestAnimationFrame(loop);
+        return;
+      }
+      const flying = st.alive && st.countdown <= 0;
+      if (st.invuln > 0) st.invuln -= dt;
       // ship
       const thrust = 0.35;
-      if (st.alive) {
-        if (keys.has("arrowup") || keys.has("w")) st.vy -= thrust;
-        if (keys.has("arrowdown") || keys.has("s")) st.vy += thrust;
-        if (keys.has("arrowleft") || keys.has("a")) st.vx -= thrust;
-        if (keys.has("arrowright") || keys.has("d")) st.vx += thrust;
-        if (keys.has(" ")) { st.vx *= 0.94; st.vy *= 0.94; }
+      st.thrusting = false;
+      st.braking = false;
+      if (flying) {
+        if (keys.has("arrowup") || keys.has("w")) { st.vy -= thrust; st.thrusting = true; }
+        if (keys.has("arrowdown") || keys.has("s")) { st.vy += thrust; st.thrusting = true; }
+        if (keys.has("arrowleft") || keys.has("a")) { st.vx -= thrust; st.thrusting = true; }
+        if (keys.has("arrowright") || keys.has("d")) { st.vx += thrust; st.thrusting = true; }
+        if (keys.has(" ")) { st.vx *= 0.94; st.vy *= 0.94; st.braking = true; }
+        const sp = Math.hypot(st.vx, st.vy);
+        if (sp > 0.6) st.angle = Math.atan2(st.vy, st.vx);
+        // exhaust trail while thrusting
+        if (st.thrusting && st.particles.length < 90) {
+          st.particles.push({
+            x: st.px - Math.cos(st.angle) * 16, y: st.py - Math.sin(st.angle) * 16,
+            vx: -Math.cos(st.angle) * 2 + (Math.random() - 0.5), vy: -Math.sin(st.angle) * 2 + (Math.random() - 0.5),
+            life: 22, max: 22,
+          });
+        }
       }
       st.px = Math.max(10, Math.min(W - 10, st.px + st.vx));
       st.py = Math.max(10, Math.min(H - 10, st.py + st.vy));
@@ -113,7 +153,7 @@ export function Orbit() {
       st.bodies = st.bodies.filter((b) => b.x > -60 && b.x < W + 60 && b.y > -60 && b.y < H + 60);
 
       // collisions
-      if (st.alive) {
+      if (flying) {
         for (const b of st.bodies) {
           const d = Math.hypot(b.x - st.px, b.y - st.py);
           if (d < b.r + 10) {
@@ -121,26 +161,55 @@ export function Orbit() {
               st.score += 10;
               setScore(st.score);
               sound.select();
+              st.rings.push({ x: b.x, y: b.y, r: 6, life: 26 });
+              st.pops.push({ x: b.x, y: b.y - 14, text: "+10", life: 40 });
               b.x = -9999;
-            } else {
-              st.score = Math.max(0, st.score - 15);
-              setScore(st.score);
+            } else if (st.invuln <= 0) {
+              // hull hit: lose a life, never points — brief shields after
+              st.lives -= 1;
+              setLives(st.lives);
+              st.invuln = 1500;
               sound.error();
+              st.shake = 9;
+              st.pops.push({ x: st.px, y: st.py - 18, text: "HIT", life: 40 });
               // knock away
               const a = Math.atan2(st.py - b.y, st.px - b.x);
               st.vx = Math.cos(a) * 6;
               st.vy = Math.sin(a) * 6;
               b.x = -9999;
+              if (st.lives <= 0) {
+                st.alive = false;
+                setOver(true);
+                setBest((bb) => {
+                  const nb = Math.max(bb, st.score);
+                  try {
+                    localStorage.setItem("deepnar-orbit-best", String(nb));
+                  } catch {
+                    /* noop */
+                  }
+                  return nb;
+                });
+              }
             }
           }
         }
         st.bodies = st.bodies.filter((b) => b.x > -5000);
       }
+      // particles / pops / rings age
+      for (const p of st.particles) { p.x += p.vx; p.y += p.vy; p.life -= dt / 16; }
+      st.particles = st.particles.filter((p) => p.life > 0);
+      for (const p of st.pops) { p.y -= 0.6; p.life -= dt / 16; }
+      st.pops = st.pops.filter((p) => p.life > 0);
+      for (const r of st.rings) { r.r += 2.4; r.life -= dt / 16; }
+      st.rings = st.rings.filter((r) => r.life > 0);
+      if (st.shake > 0) st.shake = Math.max(0, st.shake - dt / 16);
 
-      // draw
+      // draw (screen shake on rock hits: tiny, decaying)
       const dark = document.documentElement.dataset.theme !== "light";
+      ctx.save();
+      if (st.shake > 0) ctx.translate((Math.random() - 0.5) * st.shake, (Math.random() - 0.5) * st.shake);
       ctx.fillStyle = dark ? "#0d0f14" : "#f4f2ec";
-      ctx.fillRect(0, 0, W, H);
+      ctx.fillRect(-12, -12, W + 24, H + 24);
       // starfield
       ctx.fillStyle = dark ? "#c9d1e3" : "#2a2d3a";
       for (let i = 0; i < 40; i++) {
@@ -149,11 +218,6 @@ export function Orbit() {
         ctx.fillRect(sx, sy, 2, 2);
       }
       ctx.globalAlpha = 1;
-      // orbit ring
-      ctx.strokeStyle = dark ? "#2a3352" : "#d7dbf2";
-      ctx.beginPath();
-      ctx.arc(W / 2, H / 2, Math.min(W, H) * 0.32, 0, Math.PI * 2);
-      ctx.stroke();
       // bodies
       for (const b of st.bodies) {
         if (b.kind === "signal") {
@@ -176,15 +240,68 @@ export function Orbit() {
           ctx.fill();
         }
       }
-      // ship
-      ctx.fillStyle = "#8fa3ff";
+      // ship: small rocket rotated toward velocity, exhaust flicker on thrust
+      // shield blink while invulnerable
+      if (st.invuln <= 0 || Math.floor(now / 120) % 2 === 0) {
+      ctx.save();
+      ctx.translate(st.px, st.py);
+      ctx.rotate(st.angle + Math.PI / 2);
+      const flame = st.thrusting ? 15 + Math.random() * 12 : st.braking ? 6 : 0;
+      if (flame > 0) {
+        ctx.fillStyle = st.braking ? "#8fa3ff" : "#57c7d4";
+        ctx.globalAlpha = 0.85;
+        ctx.beginPath();
+        ctx.moveTo(-8, 12);
+        ctx.lineTo(0, 12 + flame);
+        ctx.lineTo(8, 12);
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+      // fins
+      ctx.fillStyle = dark ? "#3a4568" : "#9aa2c8";
       ctx.beginPath();
-      ctx.arc(st.px, st.py, 10, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = dark ? "#0d0f14" : "#fff";
+      ctx.moveTo(-11, 3); ctx.lineTo(-19, 16); ctx.lineTo(-9, 12); ctx.closePath(); ctx.fill();
       ctx.beginPath();
-      ctx.arc(st.px, st.py, 4, 0, Math.PI * 2);
+      ctx.moveTo(11, 3); ctx.lineTo(19, 16); ctx.lineTo(9, 12); ctx.closePath(); ctx.fill();
+      // body
+      ctx.fillStyle = dark ? "#e8ebf7" : "#2a2d3a";
+      ctx.beginPath();
+      ctx.moveTo(0, -25);
+      ctx.lineTo(9, 3); ctx.lineTo(9, 12); ctx.lineTo(-9, 12); ctx.lineTo(-9, 3);
+      ctx.closePath(); ctx.fill();
+      // cockpit
+      ctx.fillStyle = st.braking ? "#8fa3ff" : "#57c7d4";
+      ctx.beginPath();
+      ctx.arc(0, -6, 4.5, 0, Math.PI * 2);
       ctx.fill();
+      ctx.restore();
+      }
+      // exhaust particles
+      for (const p of st.particles) {
+        ctx.globalAlpha = Math.max(0, p.life / p.max) * 0.8;
+        ctx.fillStyle = "#57c7d4";
+        ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3);
+      }
+      ctx.globalAlpha = 1;
+      // pickup rings
+      for (const r of st.rings) {
+        ctx.globalAlpha = Math.max(0, r.life / 26);
+        ctx.strokeStyle = "#57c7d4";
+        ctx.beginPath();
+        ctx.arc(r.x, r.y, r.r, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      // score pops
+      ctx.font = `${15 * 2}px monospace`;
+      for (const p of st.pops) {
+        ctx.globalAlpha = Math.max(0, Math.min(1, p.life / 20));
+        ctx.fillStyle = p.text.startsWith("+") ? "#7fd08a" : "#e08a8a";
+        ctx.fillText(p.text, p.x - 12, p.y);
+      }
+      ctx.globalAlpha = 1;
+      ctx.restore();
 
       if (acc > 100) {
         acc = 0;
@@ -217,7 +334,14 @@ export function Orbit() {
         <span className="font-bold" style={{ color: "var(--fg)" }}>ORBIT</span>
         <span>score <b style={{ color: "var(--accent-soft)" }}>{score}</b></span>
         <span>best <b>{best}</b></span>
-        <span className="ml-auto tabular-nums">{over ? "done" : `${time}s`}</span>
+        <span title="hull" aria-label={`${lives} hull left`} className="tabular-nums" style={{ color: lives <= 2 ? "var(--err)" : undefined }}>
+          {"♥".repeat(Math.max(0, lives))}{"♡".repeat(Math.max(0, 5 - lives))}
+        </span>
+        <span className="ml-auto tabular-nums">{over ? "done" : paused ? "paused" : "endless"}</span>
+        <button title="hide to desktop" aria-label="minimize" className="px-2 hover:bg-[var(--sel-bg)]"
+          style={{ color: "var(--muted)" }} onClick={() => { useShell.getState().setPhase("desktop"); }}>
+          <span aria-hidden style={{ fontSize: 17, lineHeight: 1 }}>–</span>
+        </button>
         {over && (
           <button className="px-2.5 py-1 border text-[12px]" style={{ borderColor: "var(--accent)", color: "var(--accent-soft)" }}
             onClick={() => { setOver(false); }}>
@@ -226,18 +350,32 @@ export function Orbit() {
         )}
       </div>
       <div className="flex-1 min-h-0 relative">
-        <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
+        <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" tabIndex={0}
+          onKeyDown={(e) => { if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(e.key)) e.preventDefault(); }} />
+        {!over && count > 0 && (
+          <div className="absolute inset-0 grid place-items-center pointer-events-none">
+            <div className="text-[44px] font-bold tabular-nums px-6 py-2 border" style={{ color: "var(--fg)", background: "var(--surface)", borderColor: "var(--border)" }}>{count}</div>
+          </div>
+        )}
+        {!over && paused && (
+          <div className="absolute inset-0 grid place-items-center pointer-events-none">
+            <div className="text-center px-6 py-4 border space-y-1" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+              <div className="text-[16px] font-bold" style={{ color: "var(--fg)" }}>paused</div>
+              <div className="text-[12px]" style={{ color: "var(--muted)" }}>esc to resume</div>
+            </div>
+          </div>
+        )}
         {over && (
           <div className="absolute inset-0 grid place-items-center" style={{ background: "rgba(3,4,8,0.55)" }}>
             <div className="text-center space-y-1">
-              <div className="text-[20px] font-bold" style={{ color: "var(--fg)" }}>{score} signals</div>
-              <div className="text-[12px]" style={{ color: "var(--muted)" }}>arrows / wasd · space brakes · touch drags</div>
+              <div className="text-[20px] font-bold" style={{ color: "var(--fg)" }}>hull breached · {score} signals</div>
+              <div className="text-[12px]" style={{ color: "var(--muted)" }}>arrows / wasd · space brakes · esc pauses · touch drags</div>
             </div>
           </div>
         )}
       </div>
       <div className="px-4 py-1.5 text-[11.5px] border-t shrink-0" style={{ borderColor: "var(--border)", color: "var(--muted)" }}>
-        arrows / wasd to thrust · space to brake · catch ~ · dodge rock
+        arrows / wasd to thrust · space to brake · esc pauses · catch ~ · dodge rock · 5 hits out
       </div>
     </div>
   );

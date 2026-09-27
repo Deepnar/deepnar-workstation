@@ -1,43 +1,20 @@
 "use client";
 
 // SYSTEM → DESKTOP (3 real spaces) → APP.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { CircleHelp, LogOut, Search, Volume2, VolumeX } from "lucide-react";
 import { useShell } from "@/lib/store";
+import { AnimatePresence, motion } from "framer-motion";
 import { Workstation } from "@/workstation/Workstation";
 import { Palette } from "@/workstation/Palette";
 import { Orbit } from "@/apps/Orbit";
 import { Constellation } from "@/apps/Constellation";
 import { Pet } from "./Pet";
 import { Contact, Help, Settings, Toasts } from "./Overlays";
+import { CustomCursor } from "./Cursor";
 import { sound, ambience } from "@/audio/engine";
 
-/* ── procedural backdrop ── */
-export function Wallpaper() {
-  const stars = useMemo(() => {
-    let seed = 1337;
-    const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
-    return Array.from({ length: 210 }, () => ({ x: rnd() * 100, y: rnd() * 100, r: rnd() * rnd() * 0.36 + 0.08, o: rnd() * 0.8 + 0.2 }));
-  }, []);
-  return (
-    <div className="absolute inset-0 overflow-hidden" aria-hidden style={{ background: "var(--wallpaper)" }}>
-      <div className="absolute -top-32 left-[8%] w-[560px] h-[380px] rounded-full" style={{ background: "radial-gradient(ellipse, var(--accent) 0%, transparent 65%)", opacity: 0.1, filter: "blur(10px)" }} />
-      <div className="absolute bottom-[-160px] right-[4%] w-[640px] h-[420px] rounded-full" style={{ background: "radial-gradient(ellipse, var(--icy) 0%, transparent 65%)", opacity: 0.08, filter: "blur(12px)" }} />
-      <div className="absolute top-[38%] left-[52%] w-[300px] h-[180px] rounded-full" style={{ background: "radial-gradient(ellipse, var(--warm) 0%, transparent 65%)", opacity: 0.05, filter: "blur(14px)" }} />
-      <svg className="absolute inset-0 w-full h-full wallpaper-stars" viewBox="0 0 100 100" preserveAspectRatio="none">
-        {stars.map((s, i) => (
-          <circle key={i} cx={s.x} cy={s.y} r={s.r * 0.14} fill="var(--fg)" opacity={s.o * 0.65} />
-        ))}
-        <g transform="rotate(-18 76 24)">
-          <ellipse cx="76" cy="24" rx="15" ry="4.5" fill="none" stroke="var(--accent)" strokeOpacity="0.28" strokeWidth="0.3" />
-          <ellipse cx="76" cy="24" rx="10.5" ry="3" fill="none" stroke="var(--accent)" strokeOpacity="0.18" strokeWidth="0.25" />
-        </g>
-        <circle cx="76" cy="24" r="5" fill="var(--accent)" fillOpacity="0.2" />
-        <circle cx="74.5" cy="22.5" r="5" fill="var(--wallpaper)" opacity="0.55" />
-      </svg>
-      <div className="absolute inset-x-0 bottom-0 h-40" style={{ background: "linear-gradient(transparent, rgba(0,0,0,0.35))" }} />
-    </div>
-  );
-}
+import { Starfield } from "./Starfield";
 
 /* ── phase 1: boot ── */
 const BOOT_LINES = ["deepnar/orien-compat · kernel 6.16-guest", "mounting ~/projects ~/research ~/oss", "local index ready · starting compositor", "ready."];
@@ -57,7 +34,7 @@ export function Boot() {
   if (phase !== "boot") return null;
   const advance = () => setPhase("greeter");
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center cursor-pointer" style={{ background: "#06070b" }} onClick={advance} onKeyDown={advance} role="button" tabIndex={0} aria-label="skip boot">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center cursor-pointer" style={{ background: "var(--bg)" }} onClick={advance} onKeyDown={advance} role="button" tabIndex={0} aria-label="skip boot">
       <div className="text-[13px] leading-7 font-mono" style={{ color: "var(--fg-dim)" }}>
         {BOOT_LINES.slice(0, n).map((l, i) => (
           <div key={i}><span style={{ color: "var(--ok)" }}>ok</span> · {l}</div>
@@ -70,7 +47,7 @@ export function Boot() {
 
 /* ── phase 2: greeter (the one clock lives here + waybar) ── */
 export function Greeter() {
-  const { phase, setPhase, notify } = useShell();
+  const { phase, setPhase, setDesktopWs, notify } = useShell();
   const [time, setTime] = useState("--:--");
   useEffect(() => {
     if (phase !== "greeter") return;
@@ -83,22 +60,40 @@ export function Greeter() {
     return () => clearInterval(t);
   }, [phase]);
   if (phase !== "greeter") return null;
+  return <GreeterCard time={time} setPhase={setPhase} setDesktopWs={setDesktopWs} />;
+}
+
+function GreeterCard({ time, setPhase, setDesktopWs }: {
+  time: string;
+  setPhase: (p: "app") => void;
+  setDesktopWs: (w: 1 | 2 | 3) => void;
+}) {
+  const [connecting, setConnecting] = useState<string[] | null>(null);
   const enter = () => {
+    if (connecting) return;
     sound.enter();
     try {
       localStorage.setItem("deepnar-seen", "1");
     } catch {
       /* private mode */
     }
-    if (window.matchMedia("(max-width: 767px)").matches) {
+    // ssh-style handshake before the session opens
+    setConnecting(["$ ssh guest@orien"]);
+    const lines = ["connecting to orien… ok (11ms)", "auth: guest — welcome"];
+    lines.forEach((ln, i) => {
+      setTimeout(() => setConnecting((c) => (c ? [...c, ln] : c)), 380 * (i + 1));
+    });
+    setTimeout(() => {
+      // guest lands straight in the workstation; the desktop page waits
+      // behind minimize and launches the other two spaces from there
+      setDesktopWs(1);
       setPhase("app");
-    } else {
-      setPhase("desktop");
-    }
+      try { window.dispatchEvent(new Event("star-boost")); } catch { /* noop */ }
+    }, 380 * (lines.length + 1));
   };
   return (
-    <div className="fixed inset-0 z-[60] overflow-hidden" style={{ background: "#06070b" }}>
-      <Wallpaper />
+    <div className="fixed inset-0 z-[60] overflow-hidden cursor-theme" style={{ background: "var(--bg)" }}>
+      <Starfield />
       <div className="relative h-full flex flex-col items-center justify-center gap-1 text-center px-6">
         <div className="text-[54px] font-bold tabular-nums" style={{ color: "var(--fg)" }}>{time}</div>
         <div className="text-[12px] uppercase tracking-[0.3em] mb-8" style={{ color: "var(--muted)" }}>
@@ -106,11 +101,20 @@ export function Greeter() {
         </div>
         <div className="text-[15px]" style={{ color: "var(--fg)" }}>deepnar</div>
         <div className="text-[12px] mb-6" style={{ color: "var(--muted)" }}>guest session · host orien</div>
-        <button onClick={enter} autoFocus
-          className="px-6 py-2.5 text-[13px] border enter-btn" style={{ borderColor: "var(--accent)", color: "var(--accent-soft)" }}
-          onKeyDown={(e) => { if (e.key === "Enter") enter(); }}>
-          [ enter guest session ]
-        </button>
+        {connecting ? (
+          <div className="text-left text-[12.5px] font-mono px-5 py-4 border min-w-[300px]" style={{ borderColor: "var(--border)", color: "var(--fg-dim)" }} aria-live="polite">
+            {connecting.map((ln, i) => (
+              <div key={i} className={i === 0 ? "mb-1" : undefined} style={i === 0 ? { color: "var(--fg)" } : undefined}>{ln}</div>
+            ))}
+            <span className="inline-block w-2 h-4 mt-1" style={{ background: "var(--accent)" }} />
+          </div>
+        ) : (
+          <button onClick={enter} autoFocus
+            className="px-6 py-2.5 text-[13px] border enter-btn" style={{ borderColor: "var(--accent)", color: "var(--accent-soft)" }}
+            onKeyDown={(e) => { if (e.key === "Enter") enter(); }}>
+            [ enter guest session ]
+          </button>
+        )}
       </div>
     </div>
   );
@@ -118,7 +122,9 @@ export function Greeter() {
 
 /* ── waybar: real desktop state only ── */
 export function Waybar() {
-  const { desktopWs, setDesktopWs, theme, setTheme, toggle, phase } = useShell();
+  const { desktopWs, setDesktopWs, toggle, phase, logout } = useShell();
+  const soundOn = useShell((s) => s.settings.sound);
+  const setSettings = useShell((s) => s.setSettings);
   const [time, setTime] = useState("--:--");
   useEffect(() => {
     const f = () => setTime(new Date().toTimeString().slice(0, 5));
@@ -127,30 +133,32 @@ export function Waybar() {
     return () => clearInterval(t);
   }, []);
   const names = ["workstation", "orbit", "signal"];
+  const glyphs = [">_", "◌", "✦"];
   return (
     <header className="relative z-20 flex items-center gap-1 px-3 h-9 text-[12px] border-b shrink-0" style={{ borderColor: "var(--border)", background: "color-mix(in srgb, var(--surface) 82%, transparent)", backdropFilter: "blur(8px)" }} aria-label="system bar">
+
       <nav className="flex gap-0.5" aria-label="desktop workspaces">
         {([1, 2, 3] as const).map((w) => (
           <button key={w} title={`${w} · ${names[w - 1]} (alt+${w})`} aria-label={`desktop workspace ${names[w - 1]}`}
             onClick={() => { sound.tick(w >= desktopWs ? 1 : -1); setDesktopWs(w); }}
-            className="w-7 h-7 grid place-items-center"
+            className="h-7 grid place-items-center px-1.5 min-w-7"
             style={desktopWs === w
               ? { color: "var(--accent-soft)", background: "var(--sel-bg)", boxShadow: "inset 0 -2px 0 var(--accent)" }
               : { color: "var(--muted)", background: "transparent" }}>
-            {w}
+            {desktopWs === w ? <span><b>{w}</b> <span className="text-[11.5px]">{glyphs[w - 1]} {names[w - 1]}</span></span> : w}
           </button>
         ))}
       </nav>
       <span className="mx-2 hidden sm:inline" style={{ color: "var(--muted)" }}>deepnar@orien</span>
       <span className="ml-auto" />
       {phase === "app" && (
-        <button title="find anything (ctrl+k)" onClick={() => toggle("paletteOpen")} className="px-2 py-1 hover:text-[var(--fg)]" style={{ color: "var(--muted)" }} aria-label="search">⌕</button>
+        <button title="find anything (ctrl+k)" onClick={() => toggle("paletteOpen")} className="p-1.5 hover:text-[var(--fg)]" style={{ color: "var(--muted)" }} aria-label="search"><Search size={17} /></button>
       )}
-      <button title="settings" onClick={() => toggle("settingsOpen")} className="px-2 py-1 hover:text-[var(--fg)]" style={{ color: "var(--muted)" }} aria-label="settings">♪</button>
-      <button title="theme" onClick={() => { setTheme(theme === "dark" ? "light" : "dark"); sound.toggle(); }} className="px-2 py-1 hover:text-[var(--fg)]" style={{ color: "var(--muted)" }} aria-label="toggle theme">
-        {theme === "dark" ? "◐" : "◑"}
-      </button>
-      <button title="help (?)" onClick={() => toggle("helpOpen")} className="px-2 py-1 hover:text-[var(--fg)]" style={{ color: "var(--muted)" }} aria-label="help">?</button>
+      <button title="sound on/off" onClick={() => { try { setSettings({ sound: !soundOn }); } catch {} sound.select(); }} className="p-1.5 hover:text-[var(--fg)]" style={{ color: "var(--muted)" }} aria-label="sound">{soundOn ? <Volume2 size={17} /> : <VolumeX size={17} />}</button>
+      <button title="help (?)" onClick={() => toggle("helpOpen")} className="p-1.5 hover:text-[var(--fg)]" style={{ color: "var(--muted)" }} aria-label="help"><CircleHelp size={17} /></button>
+      {phase !== "greeter" && (
+        <button title="log out (back to greeter)" onClick={() => { sound.appClose(); logout(); }} className="p-1.5 hover:text-[var(--fg)]" style={{ color: "var(--muted)" }} aria-label="log out"><LogOut size={17} /></button>
+      )}
       <span className="pl-1 tabular-nums" style={{ color: "var(--fg-dim)" }}>{time}</span>
     </header>
   );
@@ -172,8 +180,8 @@ export function Desktop() {
     setPhase("app");
   };
   return (
-    <div className="fixed inset-0 z-40 flex flex-col overflow-hidden" style={{ background: "#06070b" }}>
-      <Wallpaper />
+    <div className="fixed inset-0 z-40 flex flex-col overflow-hidden cursor-theme" style={{ background: "var(--bg)" }}>
+      <Starfield />
       <Waybar />
       <div className="relative flex-1">
         <button onClick={open} autoFocus
@@ -186,7 +194,6 @@ export function Desktop() {
           <span className="text-[12px]" style={{ color: "var(--fg-dim)" }}>{L.name}</span>
           <span className="text-[10.5px]" style={{ color: "var(--muted)" }}>{L.hint} · open ⏎</span>
         </button>
-        <Pet anchor="desktop" />
       </div>
       <Toasts />
     </div>
@@ -197,27 +204,14 @@ export function Desktop() {
 const APP_TITLES = { 1: "workstation", 2: "orbit", 3: "signal" } as const;
 
 export function AppWindow() {
-  const { phase, setPhase, appMaximized, toggle } = useShell();
+  const { phase } = useShell();
   const desktopWs = useShell((s) => s.desktopWs);
   if (phase !== "app") return null;
   return (
-    <div className="fixed inset-0 z-40 flex flex-col overflow-hidden pt-9" style={{ background: "#06070b" }}>
-      <Wallpaper />
-      <div className={`relative flex-1 flex flex-col min-h-0 app-open ${appMaximized ? "m-0" : "m-3 sm:m-6"}`}>
-        <div className="flex flex-col flex-1 min-h-0 border overflow-hidden" style={{ borderColor: "var(--app-border)", background: "var(--bg)", borderRadius: appMaximized ? 0 : 10 }}>
-          <div className="flex items-center gap-0.5 px-2 h-9 border-b shrink-0" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-            <span className="text-[12px] px-1" style={{ color: "var(--accent-soft)" }}>{APP_TITLES[desktopWs]}</span>
-            <span className="ml-auto" />
-            <button onClick={() => toggle("appMaximized")} title={appMaximized ? "restore" : "maximize"} aria-label="maximize"
-              className="px-2 py-1 text-[12px] hover:bg-[var(--sel-bg)]" style={{ color: "var(--muted)" }}>
-              {appMaximized ? "▢" : "▣"}
-            </button>
-            <button onClick={() => { sound.appClose(); setPhase("desktop"); }} title="hide to desktop" aria-label="minimize"
-              className="px-2 py-1 text-[12px] hover:bg-[var(--sel-bg)]" style={{ color: "var(--muted)" }}>
-              –
-            </button>
-          </div>
-          <div className="flex-1 min-h-0 flex flex-col">
+    <div className="fixed inset-0 z-40 flex flex-col overflow-hidden pt-9 cursor-theme" style={{ background: "var(--bg)" }}>
+      <div className="relative flex-1 flex flex-col min-h-0 app-open m-3 sm:m-6">
+        <div className="flex flex-col flex-1 min-h-0 border overflow-hidden" style={{ borderColor: "var(--app-border)", background: "var(--bg)", borderRadius: 10 }}>
+          <div className="flex-1 min-h-0 flex flex-col relative">
             {desktopWs === 1 ? <Workstation /> : desktopWs === 2 ? <Orbit /> : <Constellation />}
           </div>
         </div>
@@ -268,17 +262,51 @@ export function Onboarding() {
 
 /* root phase router (used by page) */
 export function SystemRoot() {
-  const { phase } = useShell();
+  const { phase, desktopWs, settings } = useShell();
+  const motionOn = settings.motion;
+  const prevWs = useRef(desktopWs);
+  const prevPhase = useRef(phase);
+  const dir = desktopWs >= prevWs.current ? 1 : -1;
+  useEffect(() => {
+    prevWs.current = desktopWs;
+    prevPhase.current = phase;
+  }, [desktopWs, phase]);
+  // alt+number hops between open spaces: no re-entry animation, just cut
+  const hopping = prevPhase.current === "app" && phase === "app" && motionOn;
+  // login/logout whoosh: stars accelerate briefly toward the viewer
+  useEffect(() => {
+    if (phase === "desktop" || phase === "app") {
+      try {
+        window.dispatchEvent(new Event("star-boost"));
+      } catch {
+        /* noop */
+      }
+    }
+  }, [phase]);
   return (
     <>
       <Boot />
       <Greeter />
+      <CustomCursor />
+      {(phase === "desktop" || phase === "app") && <Pet anchor="desktop" />}
       {(phase === "desktop" || phase === "app") && (
         <>
-          {phase === "desktop" ? <Desktop /> : <AppWindow />}
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={phase === "app" ? `app-${desktopWs}` : "desktop"}
+              className="contents"
+              initial={hopping ? false : motionOn ? { opacity: 0, x: phase === "app" ? 14 * dir : 0, scale: phase === "desktop" ? 1.16 : 0.98 } : false}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={hopping ? undefined : motionOn ? { opacity: 0, x: phase === "app" ? -12 * dir : 0, scale: phase === "desktop" ? 1.1 : 1, transition: { duration: phase === "desktop" ? 0.4 : 0.1 } } : undefined}
+              transition={{ duration: phase === "desktop" ? 0.65 : 0.18, ease: [0.22, 1, 0.36, 1] }}
+            >
+              {phase === "desktop" ? <Desktop /> : <AppWindow />}
+            </motion.div>
+          </AnimatePresence>
           <WaybarHost />
           <Palette />
           <Onboarding />
+          <LoginHint />
           <Contact />
           <Help />
           <Settings />
@@ -286,6 +314,56 @@ export function SystemRoot() {
         </>
       )}
     </>
+  );
+}
+
+/* first-login hint: points at the ? icon, teaches the keys, dismisses forever */
+function LoginHint() {
+  const { phase, toggle } = useShell();
+  const [seen, setSeen] = useState(() => {
+    try {
+      return localStorage.getItem("deepnar-hint-seen") === "1";
+    } catch {
+      return true;
+    }
+  });
+  if (phase !== "app" || seen) return null;
+  const dismiss = () => {
+    try {
+      localStorage.setItem("deepnar-hint-seen", "1");
+    } catch {
+      /* private mode */
+    }
+    setSeen(true);
+  };
+  const rows: [string, string][] = [
+    ["ctrl+k", "find anything"],
+    ["/", "agent"],
+    [":", "terminal"],
+    ["?", "all keys"],
+  ];
+  return (
+    <div className="fixed top-11 right-3 z-50 w-[240px]" role="note" aria-label="keyboard hint">
+      <div className="text-right pr-14 text-[14px] leading-none" style={{ color: "var(--accent)" }} aria-hidden>▲</div>
+      <div className="border px-3 py-2.5 -mt-1 text-[12px] space-y-1" style={{ background: "var(--surface)", borderColor: "var(--accent)" }}>
+        <div className="font-bold" style={{ color: "var(--fg)" }}>everything is keys <span style={{ color: "var(--muted)" }}>— ? for more</span></div>
+        {rows.map(([k, what]) => (
+          <div key={k} className="flex items-center gap-2">
+            <kbd className="px-1.5 py-px border text-[11px]" style={{ borderColor: "var(--border)", color: "var(--accent-soft)" }}>{k}</kbd>
+            <span style={{ color: "var(--fg-dim)" }}>{what}</span>
+          </div>
+        ))}
+        <div className="flex gap-2 pt-1">
+          <button onClick={() => { dismiss(); toggle("helpOpen"); }} className="px-2 py-1 border text-[11.5px]"
+            style={{ borderColor: "var(--accent)", color: "var(--accent-soft)" }}>
+            show all ?
+          </button>
+          <button onClick={dismiss} className="px-2 py-1 text-[11.5px]" style={{ color: "var(--muted)" }}>
+            dismiss ✕
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

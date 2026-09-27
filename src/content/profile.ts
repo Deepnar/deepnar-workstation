@@ -23,6 +23,7 @@ export const profile = {
     x: "https://x.com/DeepnarS",
     email: "mailto:18deepnar@gmail.com",
     arxivPaper: "https://arxiv.org/abs/2609.16730",
+    scholar: "https://scholar.google.com/citations?user=LIHKqCAAAAAJ&hl=en",
   },
   status: {
     branch: "main",

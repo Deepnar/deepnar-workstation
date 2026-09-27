@@ -41,11 +41,6 @@ const ENTITY_PATH: Record<string, string> = {
 export function runAgentAction(run: string, ask: (q: string) => void) {
   const s = useShell.getState();
   const r = run.trim();
-  if (r === "theme") {
-    s.setTheme(s.theme === "dark" ? "light" : "dark");
-    sound.toggle();
-    return;
-  }
   if (r === "pet") {
     s.setPet(!s.petOn);
     return;
@@ -70,8 +65,8 @@ export function runAgentAction(run: string, ask: (q: string) => void) {
   if (r === "download resume") {
     try {
       const a = document.createElement("a");
-      a.href = "/resume/Deepesh_Sonar_CV.pdf";
-      a.download = "Deepesh_Sonar_CV.pdf";
+      a.href = "/resume/Deepesh_Sonar_Resume.pdf";
+      a.download = "Deepesh_Sonar_Resume.pdf";
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -106,6 +101,13 @@ export function Agent({ hidden }: { hidden: boolean }) {
   const [busy, setBusy] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const epoch = useShell((s) => s.sessionEpoch);
+
+  useEffect(() => {
+    setMsgs([]);
+    setValue("");
+    setBusy(false);
+  }, [epoch]);
 
   useEffect(() => {
     bodyRef.current?.scrollTo({ top: bodyRef.current.scrollHeight });
