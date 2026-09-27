@@ -1,0 +1,32 @@
+{
+  "name": "deepnar-workstation",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Deepesh Sonar's portfolio as a browser-based research/development workstation.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "tsc --noEmit && node scripts/scan-secrets.mjs",
+    "sync-github": "node scripts/sync-github.mjs",
+    "scan-secrets": "node scripts/scan-secrets.mjs"
+  },
+  "dependencies": {
+    "framer-motion": "latest",
+    "lucide-react": "latest",
+    "next": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "zustand": "latest"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "latest",
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "playwright-core": "^1.63.0",
+    "postcss": "latest",
+    "tailwindcss": "latest",
+    "typescript": "latest"
+  }
+}
