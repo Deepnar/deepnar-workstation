@@ -11,3 +11,6 @@ dist/
 github-sync.json
 tsconfig.tsbuildinfo
 next-env.d.ts
+
+# local agent tooling (environment, not source)
+.agents/
