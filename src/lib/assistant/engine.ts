@@ -214,12 +214,11 @@ export function answer(rawInput: string, ctx: AssistCtx): AssistAnswer {
         "Deepesh Sonar — B.E. Computer Engineering, TCET Mumbai (2028) · CGPA 9.53/10.",
         "Flagships: ICE · NEXUS (merged) · Presentation Forge · timetable-generator · prompt-routing-classifier.",
         "Merged OSS: ModelDock #221/#222 · semantic-router #3288 · MNE #14283 · CivicResolve #1.",
-        "Full readable view: workspace 5 (about) or `open about`.",
+        "Full readable view: workspace 5 (profile) or `open resume.md`.",
       ]);
     case "CURRENT_WORK":
       return done("CURRENT_WORK", ["reading ~/about/now.md", "◆ current"], [
-        "now: ICE follow-up evaluation, LSREP out there (arXiv 2609.16730), monitoring open PRs (MNE #14287, graphiti #1772).",
-        "next: concentrated internship search for the December 2026 window; Fall 2028 master's prep.",
+        "now: ICE follow-up evaluation, LSREP out there (arXiv 2609.16730), open PRs under review (MNE #14287, graphiti #1772).",
       ]);
     case "ABOUT":
       return done("ABOUT", ["reading ~/about/README.md", "◆ identity"], [

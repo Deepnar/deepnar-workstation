@@ -1,0 +1,146 @@
+{
+  "syncedAt": "2026-09-27",
+  "repoCount": 34,
+  "stars": [
+    {
+      "repo": "Deepnar/presentation-forge",
+      "stars": 15
+    },
+    {
+      "repo": "Deepnar/ice",
+      "stars": 3
+    },
+    {
+      "repo": "Deepnar/Deepnar",
+      "stars": 1
+    },
+    {
+      "repo": "Deepnar/graphiti",
+      "stars": 1
+    },
+    {
+      "repo": "Deepnar/CivicResolve",
+      "stars": 1
+    },
+    {
+      "repo": "Deepnar/hostel-room-allocation-system",
+      "stars": 1
+    },
+    {
+      "repo": "Deepnar/micrograd-from-scratch",
+      "stars": 1
+    },
+    {
+      "repo": "Deepnar/LoginDemo",
+      "stars": 1
+    }
+  ],
+  "mergedPRs": 11,
+  "openPRs": 5,
+  "merged": [
+    {
+      "title": "Transaction fraud head, TF-IDF message head, debiased URL head, transaction website flows, admin-swappable AI provider",
+      "repo": "Rishit1769/NEXUS-Fraud-Detection",
+      "url": "https://github.com/Rishit1769/NEXUS-Fraud-Detection/pull/1"
+    },
+    {
+      "title": "Add duplicate greeting to README",
+      "repo": "orien06/first-repo",
+      "url": "https://github.com/orien06/first-repo/pull/2"
+    },
+    {
+      "title": "Update README title formatting",
+      "repo": "Deepnar/ppo-clip-demo",
+      "url": "https://github.com/Deepnar/ppo-clip-demo/pull/4"
+    },
+    {
+      "title": "Update README.md",
+      "repo": "Deepnar/ppo-clip-demo",
+      "url": "https://github.com/Deepnar/ppo-clip-demo/pull/3"
+    },
+    {
+      "title": "Fix README title formatting",
+      "repo": "Deepnar/ppo-clip-demo",
+      "url": "https://github.com/Deepnar/ppo-clip-demo/pull/1"
+    },
+    {
+      "title": "MRG: Avoid pytest 10 warnings in sklearn estimator checks",
+      "repo": "mne-tools/mne-python",
+      "url": "https://github.com/mne-tools/mne-python/pull/14283"
+    },
+    {
+      "title": "[Bug] Default local Envoy logging to info",
+      "repo": "vllm-project/semantic-router",
+      "url": "https://github.com/vllm-project/semantic-router/pull/3288"
+    },
+    {
+      "title": "fix(gpt4all): discover existing model directory (#30)",
+      "repo": "OpenAgentHQ/modeldock",
+      "url": "https://github.com/OpenAgentHQ/modeldock/pull/222"
+    },
+    {
+      "title": "fix(jan): map runtime capabilities",
+      "repo": "OpenAgentHQ/modeldock",
+      "url": "https://github.com/OpenAgentHQ/modeldock/pull/221"
+    },
+    {
+      "title": "feat: AI Observation Engine — street-imagery verification, background worker, tests, docs",
+      "repo": "Newer1107/CivicResolve",
+      "url": "https://github.com/Newer1107/CivicResolve/pull/1"
+    },
+    {
+      "title": "Update index.htm - we should inclide phillippines as one of the country",
+      "repo": "Deepnar/first-github-demo",
+      "url": "https://github.com/Deepnar/first-github-demo/pull/1"
+    }
+  ],
+  "open": [
+    {
+      "title": "fix: support SentencePiece artifacts in hash_tokenizer_config",
+      "repo": "AOSSIE-Org/OpenVerifiableLLM",
+      "url": "https://github.com/AOSSIE-Org/OpenVerifiableLLM/pull/135"
+    },
+    {
+      "title": "fix gpt-5 context window (128000 -> 272000)",
+      "repo": "archi-physics/archi",
+      "url": "https://github.com/archi-physics/archi/pull/653"
+    },
+    {
+      "title": "FIX: Warn when bridged interpolation uses bad channels",
+      "repo": "mne-tools/mne-python",
+      "url": "https://github.com/mne-tools/mne-python/pull/14287"
+    },
+    {
+      "title": "fix: per-list E/I id namespaces in the resolution judge (#1728)",
+      "repo": "getzep/graphiti",
+      "url": "https://github.com/getzep/graphiti/pull/1772"
+    },
+    {
+      "title": "fix(ai): check-photo server-side imageData size cap (5MB)",
+      "repo": "Newer1107/CivicResolve",
+      "url": "https://github.com/Newer1107/CivicResolve/pull/2"
+    }
+  ],
+  "activityWeeks": [
+    0,
+    0,
+    42,
+    54,
+    54,
+    0,
+    25,
+    132,
+    83,
+    60,
+    139,
+    132,
+    677,
+    226,
+    112,
+    405,
+    86,
+    19,
+    49,
+    2
+  ]
+}

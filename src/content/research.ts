@@ -77,6 +77,4 @@ export const researchTimeline: { date: string; event: string }[] = [
   { date: "Jun 2026", event: "ICE begins — local-first conversational memory" },
   { date: "Aug 2026", event: "Presentation Forge + merged OSS run (ModelDock ×2, semantic-router)" },
   { date: "Sep 2026", event: "MNE-Python #14283 merged · LSREP on arXiv (2609.16730) · ICE v2 manuscript frozen" },
-  { date: "Dec 2026", event: "Onsite internship window (Mumbai)" },
-  { date: "2028", event: "B.E. complete → Fall 2028 master's applications" },
 ];

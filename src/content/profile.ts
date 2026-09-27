@@ -14,7 +14,6 @@ export const profile = {
     school: "Thakur College of Engineering and Technology (TCET), Mumbai",
     degree: "B.E. Computer Engineering",
     expected: "2028",
-    // As stated in resume; Sem-IV revaluation confirmation pending.
     cgpa: "9.53 / 10",
   },
   links: {
@@ -29,7 +28,7 @@ export const profile = {
     branch: "main",
     editor: "nvim",
     os: "Arch",
-    availability: "research / software internships · Dec 2026 onsite window",
+    availability: "open to research / software internships",
   },
   stack: [
     "Python",
