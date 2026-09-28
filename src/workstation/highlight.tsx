@@ -111,8 +111,8 @@ export function Markdown({ node }: { node: VNode }) {
         if (l.startsWith("# ")) return <h3 key={i} className="text-[17px] font-bold mt-1 mb-2" style={{ color: "var(--fg)" }}>{l.slice(2)}</h3>;
         if (l === "") return <div key={i} className="h-2" />;
         if (l === "---" || /^─+$/.test(l)) return <div key={i} className="my-2 border-t" style={{ borderColor: "var(--border)" }} />;
-        if (l.startsWith("· ") || l.startsWith("- ")) return <div key={i} className="flex gap-2" style={{ color: "var(--fg-dim)" }}><span style={{ color: "var(--icy)" }}>▸</span><span>{l.slice(2)}</span></div>;
-        if (l.startsWith("> ")) return <div key={i} className="pl-3 border-l-2 italic" style={{ borderColor: "var(--warm)", color: "var(--fg-dim)" }}>{l.slice(2)}</div>;
+        if (l.startsWith("· ") || l.startsWith("- ")) return <div key={i} className="flex gap-2" style={{ color: "var(--fg-dim)" }}><span style={{ color: "var(--icy)" }}>▸</span><span>{renderInline(l.slice(2))}</span></div>;
+        if (l.startsWith("> ")) return <div key={i} className="pl-3 border-l-2 italic" style={{ borderColor: "var(--warm)", color: "var(--fg-dim)" }}>{renderInline(l.slice(2))}</div>;
         return <div key={i} style={{ color: "var(--fg-dim)" }}>{renderInline(l)}</div>;
       })}
     </div>
