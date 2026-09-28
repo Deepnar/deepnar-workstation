@@ -62,21 +62,6 @@ export function runAgentAction(run: string, ask: (q: string) => void) {
     }
     return;
   }
-  if (r === "download resume") {
-    try {
-      const a = document.createElement("a");
-      a.href = "/resume/Deepesh_Sonar_Resume.pdf";
-      a.download = "Deepesh_Sonar_Resume.pdf";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      sound.download();
-      s.notify("resume downloaded");
-    } catch {
-      /* noop */
-    }
-    return;
-  }
   const m = r.match(/^open\s+(.+)$/);
   if (m) {
     const key = m[1].toLowerCase().replace(/^(the\s+|~\/)/, "");

@@ -1,102 +1,102 @@
 {
- "default": [
-  3,
-  3
- ],
- "pointer": [
-  18,
-  10
- ],
- "text": [
-  20,
-  20
- ],
- "vertical-text": [
-  20,
-  21
- ],
- "grab": [
-  20,
-  21
- ],
- "grabbing": [
-  19,
-  17
- ],
- "move": [
-  20,
-  20
- ],
- "crosshair": [
-  20,
-  20
- ],
- "cell": [
-  20,
-  20
- ],
- "wait": [
-  21,
-  21
- ],
- "progress": [
-  3,
-  3
- ],
- "help": [
-  3,
-  3
- ],
- "not-allowed": [
-  21,
-  21
- ],
- "ns-resize": [
-  20,
-  20
- ],
- "ew-resize": [
-  20,
-  20
- ],
- "nwse-resize": [
-  20,
-  20
- ],
- "nesw-resize": [
-  20,
-  20
- ],
- "col-resize": [
-  20,
-  20
- ],
- "row-resize": [
-  20,
-  21
- ],
- "zoom-in": [
-  17,
-  17
- ],
- "zoom-out": [
-  17,
-  17
- ],
- "copy": [
-  3,
-  3
- ],
  "alias": [
-  3,
-  3
- ],
- "context-menu": [
-  3,
-  3
+  2,
+  2
  ],
  "all-scroll": [
-  20,
-  20
+  15,
+  15
+ ],
+ "cell": [
+  15,
+  15
+ ],
+ "col-resize": [
+  15,
+  15
+ ],
+ "context-menu": [
+  2,
+  2
+ ],
+ "copy": [
+  2,
+  2
+ ],
+ "crosshair": [
+  15,
+  15
+ ],
+ "default": [
+  2,
+  2
+ ],
+ "ew-resize": [
+  15,
+  15
+ ],
+ "grab": [
+  15,
+  15
+ ],
+ "grabbing": [
+  14,
+  13
+ ],
+ "help": [
+  2,
+  2
+ ],
+ "move": [
+  15,
+  15
+ ],
+ "nesw-resize": [
+  15,
+  15
+ ],
+ "not-allowed": [
+  15,
+  16
+ ],
+ "ns-resize": [
+  15,
+  15
+ ],
+ "nwse-resize": [
+  15,
+  15
+ ],
+ "pointer": [
+  13,
+  7
+ ],
+ "progress": [
+  2,
+  2
+ ],
+ "row-resize": [
+  15,
+  16
+ ],
+ "text": [
+  15,
+  15
+ ],
+ "vertical-text": [
+  15,
+  16
+ ],
+ "wait": [
+  15,
+  16
+ ],
+ "zoom-in": [
+  13,
+  13
+ ],
+ "zoom-out": [
+  13,
+  13
  ]
 }

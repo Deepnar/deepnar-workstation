@@ -12,6 +12,7 @@ import { forceCollide, forceLink, forceManyBody, forceSimulation, forceX, forceY
 import { useShell } from "@/lib/store";
 import { HOME } from "@/vfs/vfs";
 import { sound } from "@/audio/engine";
+import { openLineForNode } from "@/system/pry";
 
 type Cluster = "personal" | "collab" | "research" | "oss" | "practice" | "systems" | "ghost";
 type Domain = "web" | "oss" | "backend" | "ml" | "systems";
@@ -165,7 +166,18 @@ export function Constellation() {
     if (!cv || !wrap) return;
     const ctx = cv.getContext("2d");
     if (!ctx) return;
-    const nodes: GNode[] = NODES.map((n) => ({ ...n, x: xFor(n.year) + (Math.random() - 0.5) * 60, y: BAND[n.domain] + (Math.random() - 0.5) * 60 }));
+    // deterministic initial placement: id-hashed jitter, NO Math.random.
+    // same dataset → same canonical geometry on every reload.
+    const hashId = (s: string) => {
+      let h = 2166136261;
+      for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+      return (h >>> 0) / 4294967296;
+    };
+    const nodes: GNode[] = NODES.map((n) => ({
+      ...n,
+      x: xFor(n.year) + (hashId(n.id + ":x") - 0.5) * 60,
+      y: BAND[n.domain] + (hashId(n.id + ":y") - 0.5) * 60,
+    }));
     nodesRef.current = nodes;
     const links = LINKS.map((l) => ({ ...l }));
     // linkless nodes (history fragments with no relationships) have nothing
@@ -209,6 +221,9 @@ export function Constellation() {
       const r = wrap.getBoundingClientRect();
       W = r.width; H = r.height;
       cv.width = W * dpr; cv.height = H * dpr;
+      // material container change refits the canonical view — until the
+      // user deliberately pans/zooms, after which their view is preserved.
+      try { if (!userView) fit(); } catch { /* fit not defined on first pass */ }
     };
     resize();
     const ro = new ResizeObserver(resize);
@@ -331,22 +346,64 @@ export function Constellation() {
       setZoom(k);
     };
     fitFnRef.current = fit;
-    // fit when the layout is nearly settled, then once more at rest —
-    // but never fight the user: any pointer/wheel interaction wins.
-    let fitted = false;
-    let touched = false;
-    const markTouched = () => { touched = true; };
-    sim.on("tick.fit", () => {
-      if (!fitted && !touched && sim.alpha() < 0.008) { fitted = true; fit(); }
-    });
-    sim.on("end", () => {
-      if (!touched) fit();
-    });
+    // lifecycle: settle deterministically BEFORE first paint, normalize
+    // aspect, then establish the canonical fit exactly once. user pan/zoom
+    // after that always wins; resize refits until the user takes over.
+    let userView = false;
+    const markTouched = () => { userView = true; };
+    const settle = () => {
+      sim.tick(300);
+      // normalize content aspect toward the canvas (conservative, capped):
+      // scale positions around the median — never the drawing itself.
+      const xs = nodes.map((n) => n.x ?? 0), ys = nodes.map((n) => n.y ?? 0);
+      const span = (vs: number[]) => Math.max(1, Math.max(...vs) - Math.min(...vs));
+      const target = Math.min(1.75, Math.max(1.5, W / Math.max(1, H)));
+      const f = Math.min(1.2, Math.max(0.85, Math.sqrt(target / (span(xs) / span(ys)))));
+      const med = (vs: number[]) => [...vs].sort((a, b) => a - b)[Math.floor(vs.length / 2)] ?? 0;
+      const mx = med(xs), my = med(ys);
+      for (const n of nodes) {
+        if (n.x == null || n.y == null) continue;
+        n.x = mx + (n.x - mx) * f;
+        n.y = my + (n.y - my) / f;
+      }
+      fit();
+      fitFnRef.current = () => { userView = false; fit(); };
+    };
+    settle();
 
     // dev-only pointer diagnostic (§30): ?signal-debug exposes the live
     // view + a world→screen projector so tests drive the REAL event
     // pipeline (mouse.move → at() → nodeAt → hover card). Invisible in
     // production — no DOM, no visual surface.
+    const measure = () => {
+      const xs = nodes.map((n) => n.x ?? NaN), ys = nodes.map((n) => n.y ?? NaN);
+      const scr = nodes.map((n) => (n.x == null || n.y == null ? [NaN, NaN] : toScreen(n.x, n.y)));
+      const sx = scr.map((p) => p[0]), sy = scr.map((p) => p[1]);
+      const nan = [...xs, ...ys].some((v) => !isFinite(v));
+      const wMinX = Math.min(...xs), wMaxX = Math.max(...xs);
+      const wMinY = Math.min(...ys), wMaxY = Math.max(...ys);
+      const sMinX = Math.min(...sx), sMaxX = Math.max(...sx);
+      const sMinY = Math.min(...sy), sMaxY = Math.max(...sy);
+      const occX = (sMaxX - sMinX) / Math.max(1, W), occY = (sMaxY - sMinY) / Math.max(1, H);
+      const flags = nodes.filter((n) => n.size === "flagship");
+      const flagsVisible = flags.filter((n) => {
+        const [fx, fy] = toScreen(n.x ?? 0, n.y ?? 0);
+        return fx > 0 && fy > 0 && fx < W && fy < H;
+      }).length;
+      return {
+        nan, W: Math.round(W), H: Math.round(H), k: +viewRef.current.k.toFixed(3),
+        fitK: +fitKRef.current.toFixed(3),
+        world: { minX: r1(wMinX), maxX: r1(wMaxX), minY: r1(wMinY), maxY: r1(wMaxY) },
+        screen: { minX: r1(sMinX), maxX: r1(sMaxX), minY: r1(sMinY), maxY: r1(sMaxY) },
+        occX: +occX.toFixed(2), occY: +occY.toFixed(2),
+        aspect: +((wMaxX - wMinX) / Math.max(1, wMaxY - wMinY)).toFixed(2),
+        margins: {
+          L: r1(sMinX), R: r1(W - sMaxX), T: r1(sMinY), B: r1(H - sMaxY),
+        },
+        flagsVisible, flagsTotal: flags.length, nodes: nodes.length,
+      };
+      function r1(v: number) { return Math.round(v * 10) / 10; }
+    };
     try {
       if (new URLSearchParams(window.location.search).has("signal-debug")) {
         (window as unknown as { __signal?: unknown }).__signal = {
@@ -362,6 +419,8 @@ export function Constellation() {
             setZoom(k);
           },
           hover: () => hoverRef.current,
+          pct: () => `${Math.round((viewRef.current.k / Math.max(1e-9, fitKRef.current)) * 100)}%`,
+          measure,
         };
       }
     } catch { /* noop */ }
@@ -519,6 +578,11 @@ export function Constellation() {
             sound.tick(1);
           } else {
             setSel(dragNode.id);
+            // pry comments on the node — unique line per flagship/cluster
+            try {
+              const n = nodes.find((x) => x.id === dragNode!.id);
+              if (n) window.dispatchEvent(new CustomEvent("pry-say", { detail: openLineForNode(n.id, n.label, n.cluster) }));
+            } catch { /* noop */ }
           }
         }
         dragNode = null;

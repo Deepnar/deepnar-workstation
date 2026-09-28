@@ -33,7 +33,7 @@ export const aboutReadme: string[] = [
   `· github.com/Deepnar — 34 repos, merged oss, full commit history on home`,
   `· scholar — LSREP preprint (arxiv 2609.16730)`,
   `· linkedin, orcid, x — see contact.json`,
-  `· detailed record — [[/home/deepnar/about/notable.md|notable.md]] · compressed summary — resume.pdf in this directory`,
+  `· detailed record — [[/home/deepnar/about/notable.md|notable.md]] (every claim below links its evidence)`,
 ];
 
 /** one notable entry: anchor id, heading, body lines (may contain [[path|label]] links) */
@@ -60,6 +60,7 @@ export const notable: NotableEntry[] = [
     body: [
       `## pixel over paper — multicon 2024, top 25`,
       `research + analysis + delivery on the transition to digital note-taking in education and the workplace. selected among the top 25 submissions for live presentation; led a four-member team.`,
+      `writeup: [[/home/deepnar/research/pixel-over-paper/README.md|research/pixel-over-paper]]`,
     ],
   },
   {
@@ -78,7 +79,7 @@ export const notable: NotableEntry[] = [
       `## DIPEX 2026 — state final exhibitor`,
       `cleared the MMR regional (idea presentation round, 11 feb 2026, APSIT thane) and exhibited the working model at the DIPEX 2026 state final (5–8 mar 2026, MIT sambhajinagar): civeserve, an enterprise-grade platform for ai-enhanced civic engagement.`,
       `team grew from two to six; my lanes were the security threat model, infrastructure/cost modeling, and pitch leadership.`,
-      `evidence: [[/home/deepnar/about/evidence/dipex-2026-state-final.pdf|view state-final certificate]] (regional certificate withheld — contains a verification QR).`,
+      `evidence: [[/home/deepnar/about/evidence/dipex/regional.pdf|regional certificate]] · [[/home/deepnar/about/evidence/dipex/state-final.pdf|state-final certificate]]`,
       `related: [[/home/deepnar/projects/collaborations/civicresolve/README.md|civicresolve]]`,
     ],
   },
@@ -96,6 +97,7 @@ export const notable: NotableEntry[] = [
     body: [
       `## computer society of india (TCET) — creative committee`,
       `social media / visual identity work: id cards, reveal campaigns, event collateral and logistics. 119 officially allocated activity hours.`,
+      `the committee's public face: https://www.instagram.com/tcet_csi/`,
     ],
   },
   {
@@ -107,11 +109,21 @@ export const notable: NotableEntry[] = [
     ],
   },
   {
+    id: "ev-egd",
+    kind: "coursework · first year",
+    body: [
+      `## engineering drawing sheets — first-year EGD`,
+      `hand-drafted sheets from the first-year engineering-graphics course: a chair drawn in isometric projection and in orthographic projection, dimensioned. the drawing-table-era kind of precision work.`,
+      `evidence: [[/home/deepnar/about/evidence/egd/iso.pdf|isometric sheet]] · [[/home/deepnar/about/evidence/egd/ortho.pdf|orthographic sheet]]`,
+    ],
+  },
+  {
     id: "ev-iste",
-    kind: "membership",
+    kind: "membership · 2025–2029",
     body: [
       `## ISTE — member`,
-      `member, indian society for technical education.`,
+      `member, indian society for technical education (TCET chapter), 01-05-2025 to 01-05-2029.`,
+      `evidence: [[/home/deepnar/about/evidence/certs/iste.pdf|membership certificate]]`,
     ],
   },
   {
@@ -124,10 +136,11 @@ export const notable: NotableEntry[] = [
   },
   {
     id: "ev-deloitte",
-    kind: "program · jun 2025",
+    kind: "program · jun–jul 2025",
     body: [
       `## deloitte data analytics job simulation (forage) — completion`,
       `data analysis + forensic technology simulation: dashboards, classification, business conclusions.`,
+      `evidence: [[/home/deepnar/about/evidence/certs/deloitte.pdf|completion certificate]]`,
     ],
   },
   {
@@ -135,9 +148,19 @@ export const notable: NotableEntry[] = [
     kind: "certifications",
     body: [
       `## course completions`,
-      `· spoken tutorial C training (EduPyramids / SINE IIT Bombay, invigilated exam)`,
-      `· mongodb course completion`,
-      `· java + python (udemy) course completions`,
+      `· spoken tutorial C training (EduPyramids / SINE IIT Bombay, invigilated exam — score 95%) — [[/home/deepnar/about/evidence/certs/spoken-c.pdf|certificate]]`,
+      `· introduction to mongodb (for students, jun 2025) — [[/home/deepnar/about/evidence/certs/mongodb.pdf|certificate]]`,
+      `· learn JAVA programming, Abdul Bari (udemy, 61.5h, dec 2025) — [[/home/deepnar/about/evidence/certs/java-udemy.jpg|certificate]]`,
+      `· the complete python developer, Andrei Neagoie (udemy, 31h, dec 2025) — [[/home/deepnar/about/evidence/certs/python-udemy.pdf|certificate]]`,
+    ],
+  },
+  {
+    id: "ev-dcdc",
+    kind: "volunteering",
+    body: [
+      `## degree certificate distribution ceremony — volunteer`,
+      `volunteered through the DCDC event: professionalism, dedication and responsibility in running the ceremony — appreciation certificate.`,
+      `evidence: [[/home/deepnar/about/evidence/certs/dcdc.pdf|appreciation certificate]]`,
     ],
   },
 ];

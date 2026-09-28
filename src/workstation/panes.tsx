@@ -145,13 +145,12 @@ export function FileView({ node }: { node: VNode }) {
     );
   }
   if (node.kind === "log") return <div className="p-5 max-w-3xl"><Code lang="log" lines={node.body ?? []} /></div>;
-  if (node.kind === "pdf") {
-    const dl = node.path.includes("resume") ? "Deepesh_Sonar_Resume.pdf" : undefined;
+  if (node.kind === "pdf" || node.kind === "image") {
     return (
       <div className="p-5 space-y-3 text-[13px] max-w-3xl" style={{ color: "var(--fg-dim)" }}>
         <div className="text-[11px] uppercase tracking-[0.14em]" style={{ color: "var(--muted)" }}>{node.title}</div>
-        <DocViewer src={node.link ?? ""} title={node.title ?? node.name} kind="pdf" pages={1}
-          caption={node.body} downloadName={dl} />
+        <DocViewer src={node.link ?? ""} title={node.title ?? node.name} kind={node.kind}
+          pages={1} caption={node.body} downloadName={node.name} />
       </div>
     );
   }
@@ -205,11 +204,10 @@ export function MiniCalendar() {
 /* ── home: lazyvim dashboard ── */
 const ACTIONS: { key: string; label: string; run: () => void }[] = [
   { key: "f", label: "Find file", run: () => useShell.getState().toggle("paletteOpen") },
+  { key: "a", label: "About", run: () => useShell.getState().navTo(`${HOME}/about`) },
   { key: "p", label: "Projects", run: () => useShell.getState().navTo(`${HOME}/projects`) },
   { key: "r", label: "Research", run: () => useShell.getState().navTo(`${HOME}/research/lsrep-ice`) },
   { key: "o", label: "Open source", run: () => useShell.getState().navTo(`${HOME}/oss`) },
-  { key: "v", label: "Resume", run: () => useShell.getState().openFile(`${HOME}/resume.pdf`, "pdf") },
-  { key: "a", label: "About", run: () => useShell.getState().navTo(`${HOME}/about`) },
   { key: "c", label: "Contact", run: () => useShell.getState().toggle("contactOpen") },
   { key: "?", label: "Help", run: () => useShell.getState().toggle("helpOpen") },
 ];

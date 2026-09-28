@@ -7,7 +7,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "tsc --noEmit && node scripts/scan-secrets.mjs",
+    "lint": "tsc --noEmit && node scripts/scan-secrets.mjs && node scripts/gen-cursors.mjs --check",
     "sync-github": "node scripts/sync-github.mjs",
     "scan-secrets": "node scripts/scan-secrets.mjs"
   },

@@ -4,12 +4,12 @@
 import { profile } from "@/content/profile";
 import { aboutReadme, notableBody } from "@/content/about";
 import { dirOf, projects, type Project } from "@/content/projects";
-import { paper, researchEval } from "@/content/research";
+import { paper, pixelOverPaper, researchEval } from "@/content/research";
 import { prs } from "@/content/oss";
 
 export type VKind =
   | "dir" | "markdown" | "json" | "log" | "code"
-  | "table" | "pdf" | "contact" | "calendar";
+  | "table" | "pdf" | "image" | "contact" | "calendar";
 
 export interface VNode {
   path: string;
@@ -85,7 +85,7 @@ const iceDetails: VNode[] = [
     `One service layer serves both the HTTP proxy and the MCP surface.`,
   ], { searchTerms: "ice architecture proxy pre-flight post-flight retrieval graph" }),
   md(`${HOME}/projects/ice/details/evaluation.log`, "evaluation.log", "ice v2 evaluation", [
-    `run  controlled-eval      frozen v2 snapshot (v2-paper-eval tag, NOT main)`, `     turns           1,985`, `     probes            219`,
+    `run  controlled-eval      final v2 snapshot (v2-paper-eval tag, NOT main)`, `     turns           1,985`, `     probes            219`,
     `     observations    1,211`, `     checkpoints        52`, ``,
     `run  density-stress       memory-pressure behavior`, `run  fidelity-audit     which mechanisms reached the output`, ``,
     `note candid failure cases included — settings where ICE trails pure vector-RAG.`,
@@ -177,16 +177,30 @@ const researchDir: VNode = dir(`${HOME}/research`, "research", [
   dir(`${HOME}/research/lsrep-ice`, "lsrep-ice", [
     md(`${HOME}/research/lsrep-ice/README.md`, "README.md", paper.title, [
       `# LSREP + ICE`, ``, `${paper.venue} · arXiv:${paper.id}`, ``, paper.note, ``,
-      `## one work, two halves`, paper.relationship,
+      `## one work, two halves`, paper.relationship, ``,
+      `## the architecture (ICE v2)`, ...paper.iceArch, ``,
+      `## what the evaluation actually found`, ...paper.findings, ``,
+      `final manuscript (v2): [[/home/deepnar/research/lsrep-ice/manuscript.pdf|read the v2 paper]]`,
     ], { searchTerms: "lsrep ice paper research arxiv memory evaluation", meta: { arxiv: paper.url, github: "https://github.com/Deepnar/ice" } }),
+    { path: `${HOME}/research/lsrep-ice/manuscript.pdf`, name: "manuscript.pdf", kind: "pdf", title: "ICE v2 manuscript (final, v2)", link: "/research/ice-v2-manuscript.pdf", body: ["Final v2 manuscript (37 pp.) — LSREP protocol + ICE v2 case study + both-regime evaluation.", "open to view · download to save."] },
     dir(`${HOME}/research/lsrep-ice/details`, "details", [
       md(`${HOME}/research/lsrep-ice/details/evaluation.log`, "evaluation.log", researchEval.name, [
         `run  ${researchEval.slug}`, `date ${researchEval.date}`, ``,
         `H: ${researchEval.hypothesis}`, `setup: ${researchEval.setup}`, ``,
         ...researchEval.metrics.map((m) => `     ${m.label.padEnd(16)} ${m.value}`), ``,
+        ...researchEval.detail, ``,
         `→ ${researchEval.result}`, ``, `artifact: ${researchEval.artifact}`,
       ], { searchTerms: "lsrep evaluation metrics turns probes" }),
     ]),
+  ]),
+  dir(`${HOME}/research/pixel-over-paper`, "pixel-over-paper", [
+    md(`${HOME}/research/pixel-over-paper/README.md`, "README.md", pixelOverPaper.title, [
+      `# ${pixelOverPaper.title}`, ``, pixelOverPaper.venueLine, ``, pixelOverPaper.about, ``,
+      `## team`, pixelOverPaper.team, ``,
+      `## what it studied`, ...pixelOverPaper.studied, ``,
+      `presentation: [[/home/deepnar/research/pixel-over-paper/slides.pdf|read the multicon 2024 deck]]`,
+    ], { searchTerms: "pixel over paper multicon digital note-taking presentation research", meta: {} }),
+    { path: `${HOME}/research/pixel-over-paper/slides.pdf`, name: "slides.pdf", kind: "pdf", title: "pixel over paper — multicon 2024 deck", link: "/research/pixel-over-paper-multicon-2024.pdf", body: ["Multicon 2024 presentation deck — transition to digital note-taking.", "open to view · download to save."] },
   ]),
 ]);
 
@@ -210,14 +224,28 @@ const aboutDir: VNode = dir(`${HOME}/about`, "about", [
     { searchTerms: "about deepesh sonar who background education" }),
   md(`${HOME}/about/notable.md`, "notable.md", "notable — competitions, orgs, credentials", notableBody,
     { searchTerms: "notable achievements competitions SIH DIPEX hackathon certificates experience internship membership" }),
-  { path: `${HOME}/about/resume.pdf`, name: "resume.pdf", kind: "pdf", title: "resume (PDF)", link: "/resume/Deepesh_Sonar_Resume.pdf", body: ["resume.pdf — sanitized public CV.", "open to view · download to save."] },
   dir(`${HOME}/about/evidence`, "evidence", [
-    { path: `${HOME}/about/evidence/dipex-2026-state-final.pdf`, name: "dipex-2026-state-final.pdf", kind: "pdf", title: "DIPEX 2026 state-final certificate", link: "/evidence/dipex-2026-state-final.pdf", body: ["DIPEX 2026 state-final participation certificate — civeserve working model.", "open to view · download to save."] },
+    dir(`${HOME}/about/evidence/dipex`, "dipex", [
+      { path: `${HOME}/about/evidence/dipex/regional.pdf`, name: "regional.pdf", kind: "pdf", title: "DIPEX 2026 MMR regional certificate", link: "/evidence/dipex/regional-mmr.pdf", body: ["DIPEX 2026 MMR regional (idea presentation, 11 feb 2026, APSIT thane).", "open to view · download to save."] },
+      { path: `${HOME}/about/evidence/dipex/state-final.pdf`, name: "state-final.pdf", kind: "pdf", title: "DIPEX 2026 state-final certificate", link: "/evidence/dipex/state-final.pdf", body: ["DIPEX 2026 state final (5–8 mar 2026, MIT sambhajinagar) — civeserve working model.", "open to view · download to save."] },
+    ]),
+    dir(`${HOME}/about/evidence/certs`, "certs", [
+      { path: `${HOME}/about/evidence/certs/spoken-c.pdf`, name: "spoken-c.pdf", kind: "pdf", title: "spoken tutorial C — 95%", link: "/evidence/certs/spoken-tutorial-c-95.pdf", body: ["C training, EduPyramids / SINE IIT Bombay. invigilated exam, score 95%.", "open to view · download to save."] },
+      { path: `${HOME}/about/evidence/certs/mongodb.pdf`, name: "mongodb.pdf", kind: "pdf", title: "introduction to mongodb", link: "/evidence/certs/mongodb-intro.pdf", body: ["Introduction to MongoDB (for students), jun 2025.", "open to view · download to save."] },
+      { path: `${HOME}/about/evidence/certs/java-udemy.jpg`, name: "java-udemy.jpg", kind: "image", title: "java — beginner to master (udemy)", link: "/evidence/certs/udemy-java-abdul-bari.jpg", body: ["Learn JAVA Programming, Abdul Bari — 61.5h, completed dec 2025.", "open to view · download to save."] },
+      { path: `${HOME}/about/evidence/certs/python-udemy.pdf`, name: "python-udemy.pdf", kind: "pdf", title: "complete python developer (udemy)", link: "/evidence/certs/udemy-python-neagoie.pdf", body: ["The Complete Python Developer, Andrei Neagoie — 31h, completed dec 2025.", "open to view · download to save."] },
+      { path: `${HOME}/about/evidence/certs/deloitte.pdf`, name: "deloitte.pdf", kind: "pdf", title: "deloitte data analytics job sim", link: "/evidence/certs/deloitte-data-analytics-job-sim.pdf", body: ["Deloitte data analytics job simulation (forage), jun–jul 2025.", "open to view · download to save."] },
+      { path: `${HOME}/about/evidence/certs/iste.pdf`, name: "iste.pdf", kind: "pdf", title: "ISTE membership 2025–2029", link: "/evidence/certs/iste-membership-2025-2029.pdf", body: ["Indian society for technical education, TCET chapter.", "open to view · download to save."] },
+      { path: `${HOME}/about/evidence/certs/dcdc.pdf`, name: "dcdc.pdf", kind: "pdf", title: "DCDC volunteer appreciation", link: "/evidence/certs/dcdc-volunteer-appreciation.pdf", body: ["Degree certificate distribution ceremony — volunteer appreciation.", "open to view · download to save."] },
+    ]),
+    dir(`${HOME}/about/evidence/egd`, "egd", [
+      { path: `${HOME}/about/evidence/egd/iso.pdf`, name: "iso.pdf", kind: "pdf", title: "EGD — isometric chair", link: "/evidence/egd/iso-chair.pdf", body: ["First-year engineering graphics: isometric projection sheet.", "open to view · download to save."] },
+      { path: `${HOME}/about/evidence/egd/ortho.pdf`, name: "ortho.pdf", kind: "pdf", title: "EGD — orthographic chair", link: "/evidence/egd/ortho-chair.pdf", body: ["First-year engineering graphics: orthographic projection sheet.", "open to view · download to save."] },
+    ]),
   ]),
 ]);
 
-export const ROOT: VNode = dir(HOME, "deepnar", [projectsDir, researchDir, ossDir, aboutDir,
-  { path: `${HOME}/resume.pdf`, name: "resume.pdf", kind: "pdf", title: "resume (PDF)", link: "/resume/Deepesh_Sonar_Resume.pdf", body: ["resume.pdf — sanitized public CV.", "open to view · download to save."] },
+export const ROOT: VNode = dir(HOME, "deepnar", [aboutDir, projectsDir, researchDir, ossDir,
   { path: `${HOME}/contact.json`, name: "contact.json", kind: "contact", title: "contact",
     body: [`{`, `  "github": "${profile.links.github}",`, `  "linkedin": "${profile.links.linkedin}",`,
       `  "email": "18deepnar@gmail.com",`, `  "x": "${profile.links.x}",`, `  "orcid": "${profile.links.orcid}"`, `}`] },

@@ -186,6 +186,75 @@ const P: Record<PryPool, string[]> = {
 
 export const PRY_POOLS = P;
 
+/** one unique line per thing pry can watch you open.
+ * keyed by path fragment (first match wins, longest keys first).
+ * ws2/ws3 app entries have their own lines; individual signal nodes
+ * resolve via openLineForNode() (flagship-specific, cluster fallback). */
+const OPEN_LINES: [string, string][] = [
+  ["pixel-over-paper", "pixel over paper. the multicon one. he still takes notes on paper sometimes. don't tell anyone."],
+  ["lsrep-ice/manuscript", "the actual paper. thirty-seven pages of him trying to break his own system. respect."],
+  ["lsrep-ice", "lsrep. how do you know a memory is lying. his favorite question."],
+  ["projects/ice", "ice. the memory thing. ask it something from last week. go on."],
+  ["presentation-forge", "the forge. topic in, .pptx out. he made this instead of making slides. priorities."],
+  ["timetable-generator", "the timetable. constraints in, schedule out. very responsible. very boring. very good."],
+  ["deepnar-workstation", "this place. you're inside the portfolio. it's portfolios all the way down."],
+  ["orien-config", "orien-config. his dotfiles. he rice. therefore he is."],
+  ["civicresolve", "civicresolve. the hackathon one. sih AND dipex. overachiever."],
+  ["nexus", "nexus. fraud-hunting. his lane was the whole ml expansion. merged."],
+  ["rapidrail", "rapidrail. trains + wallets + razorpay. his lane worked."],
+  ["iis-mini", "iis-mini. classical baselines for fraud. old school. effective."],
+  ["oss/merged", "merged upstream. eleven times. somebody's code out there has his fingerprints."],
+  ["oss/open", "the open ones. still waiting. no pressure, maintainers."],
+  ["oss", "upstream. where he fixes other people's code for free."],
+  ["about/notable", "the trophy shelf. every claim has a receipt. check them."],
+  ["about/evidence", "receipts. actual pdfs. he keeps them."],
+  ["about", "the human file. deepesh. be nice."],
+  ["research", "the research shelf. papers live here."],
+  ["practice/ml", "the practice folder. where the fundamentals got learned the hard way."],
+  ["practice", "practice. reps. like gym, but python."],
+  ["projects", "the projects. the main story is ice, forge, timetable. start there."],
+];
+for (const [k, v] of [
+  ["ice", "ice. the memory thing. ask it something from last week. go on."],
+  ["forge", "the forge. topic in, .pptx out. he made this instead of making slides."],
+  ["timetable", "the timetable. constraints in, schedule out."],
+  ["workstation", "this place. you're inside the portfolio."],
+  ["civic", "civicresolve. sih AND dipex."],
+  ["nexus", "nexus. fraud-hunting, merged."],
+  ["lsrep", "lsrep. how do you know a memory is lying."],
+  ["orien", "orien-config. he rice. therefore he is."],
+]) OPEN_LINES.push([k, v]);
+
+export function openLineFor(path: string, ws: number): string | null {
+  if (ws === 2) return "orbit. five clean hits and you're on the board. no pressure.";
+  if (ws === 3) return "signal. the whole history, one graph. start left, end at ice. that's the story.";
+  const p = path.toLowerCase();
+  const sorted = [...OPEN_LINES].sort((a, b) => b[0].length - a[0].length);
+  for (const [k, v] of sorted) if (k.includes("/") ? p.includes(k) : p.split("/").includes(k)) return v;
+  return null;
+}
+
+const NODE_LINES: Record<string, string> = {
+  ice: "that one. the flagship. his whole memory thesis in one node.",
+  forge: "presentation-forge. topic in, deck out. he automated his own slides.",
+  timetable: "timetable. scheduling as constraint solving. very him.",
+  workstation: "that node is this place. wave hello to yourself.",
+  lsrep: "lsrep. the protocol, not the system. evaluation is the contribution.",
+};
+const CLUSTER_LINES: Record<string, string> = {
+  personal: "a personal build. the good stuff.",
+  collab: "a team one. his lane is documented. check it.",
+  research: "research-adjacent. read the paper, not just the node.",
+  oss: "upstream work. merged or knocking. both count.",
+  practice: "practice reps. everybody starts somewhere.",
+  systems: "systems. the machine room.",
+  ghost: "history. a ghost node. it opens its successor. spooky. efficient.",
+};
+
+export function openLineForNode(id: string, label: string, cluster: string): string {
+  return NODE_LINES[id] ?? CLUSTER_LINES[cluster] ?? `oh. ${label}. noted.`;
+}
+
 // per-pool recent history — prefer lines not seen recently
 const recent: Record<string, string[]> = {};
 const INTRO_KEY = "__pry_introduced__";

@@ -219,7 +219,7 @@ const pathFor = (entity: string): string | null => {
   if (entity === "notable" || entity === "education" || entity === "experience") return `${HOME}/about/notable.md`;
   if (entity === "skills") return `${HOME}/about/README.md`;
   if (entity === "contact" || entity === "github") return `${HOME}/contact.json`;
-  if (entity === "resume") return `${HOME}/resume.pdf`;
+  if (entity === "resume") return `${HOME}/about/notable.md`;
   return null;
 };
 
@@ -256,7 +256,7 @@ export function answer(rawInput: string, ctx: AgentCtx): AgentAnswer {
     case "hostile": {
       const pool = norm.hinglish && Math.random() < 0.5 ? V.hostileHi : V.hostile;
       const [line] = pick(pool);
-      return small([line, "projects, research, resume — or ask me to open something."], [
+      return small([line, "projects, research, background — or ask me to open something."], [
         { label: "ICE", run: "open ice" }, { label: "tour", run: "tour" },
       ]);
     }
@@ -288,8 +288,8 @@ export function answer(rawInput: string, ctx: AgentCtx): AgentAnswer {
         "I can:",
         "· explain any project, paper, or upstream contribution",
         "· answer follow-ups — “what stack does it use?” remembers what “it” is",
-        "· open things, download the resume, switch theme, summon the terminal",
-        "try: “open ICE” · “show me the paper” · “download your resume”",
+        "· open things, show evidence, switch theme, summon the terminal",
+        "try: “open ICE” · “show me the paper” · “what are the certificates?”",
       ], [
         { label: "open ICE", run: "open ice" },
         { label: "research", run: "show me the paper" },
@@ -318,7 +318,7 @@ export function answer(rawInput: string, ctx: AgentCtx): AgentAnswer {
         `${profile.name} (${profile.handle}) — ${profile.tagline}`,
         ...profile.aboutLong.slice(0, 2),
         `${profile.education.degree}, ${profile.education.school} — expected ${profile.education.expected} · CGPA ${profile.education.cgpa}.`,
-        "more of the human: ~/about/README.md. the compressed version: resume.pdf.",
+        "more of the human: ~/about/README.md — record with evidence: ~/about/notable.md.",
       ], [{ label: "about file", run: "open about" }, { label: "contact", run: "how can I contact Deepesh?" }]);
     case "contact":
       return {
@@ -331,9 +331,9 @@ export function answer(rawInput: string, ctx: AgentCtx): AgentAnswer {
     case "resume":
       return {
         intent, entity, smalltalk: false,
-        body: ["sanitized public CV — one page, no private details:", "open it as a buffer, or download the actual PDF."],
-        sources: [`${HOME}/resume.pdf`],
-        actions: [{ label: "open resume", run: "open resume" }, { label: "download ↓", run: "download resume" }],
+        body: ["no single CV file here — the record lives in ~/about instead:", "background + education: ~/about/README.md · competitions, orgs, every certificate with evidence: ~/about/notable.md."],
+        sources: [`${HOME}/about/notable.md`],
+        actions: [{ label: "open notable", run: "open notable" }, { label: "about", run: "open about" }],
         trace,
       };
     case "theme":
@@ -385,8 +385,8 @@ export function answer(rawInput: string, ctx: AgentCtx): AgentAnswer {
           "coursework leans math + systems: discrete structures, data structures, algorithms, operating systems, networks, databases.",
           "preparing for graduate study; open to research and startup internships.",
         ],
-        sources: [`${HOME}/about/README.md`, `${HOME}/resume.pdf`],
-        actions: [{ label: "about file", run: "open about" }, { label: "resume", run: "open resume" }],
+        sources: [`${HOME}/about/README.md`],
+        actions: [{ label: "about file", run: "open about" }, { label: "notable", run: "open notable" }],
         trace,
       };
     case "experience":
@@ -435,12 +435,12 @@ export function answer(rawInput: string, ctx: AgentCtx): AgentAnswer {
       if (entity === "resume" || /resume|cv/.test(r))
         return {
           intent: "resume", entity: "resume", smalltalk: false,
-          body: ["sanitized public CV — downloading the actual PDF now.", "one page, email + links only, no private details."],
-          sources: [`${HOME}/resume.pdf`],
-          actions: [{ label: "download ↓", run: "download resume" }],
+          body: ["the CV file is gone — background + evidence now live in ~/about:", "every certificate opens from ~/about/evidence with its own download button."],
+          sources: [`${HOME}/about/notable.md`],
+          actions: [{ label: "open notable", run: "open notable" }],
           trace,
         };
-      return small(["download what? the resume is the one downloadable artifact here."], [{ label: "resume", run: "download resume" }]);
+      return small([`download what? certificates live under ~/about/evidence — say which one (dipex, EGD sheets, course certs).`], [{ label: "notable", run: "open notable" }]);
     case "location": {
       const cwd = ctx.cwd;
       const proj = projects.find((p) => cwd === dirOf(p) || cwd.startsWith(dirOf(p) + "/"));

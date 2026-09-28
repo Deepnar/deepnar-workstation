@@ -8,7 +8,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useShell, type PetMode } from "@/lib/store";
 import { sound } from "@/audio/engine";
-import { prySay, pryIntroChance, type PryPool } from "./pry";
+import { prySay, pryIntroChance, openLineFor, type PryPool } from "./pry";
 
 const W = 16, H = 12;
 
@@ -224,11 +224,65 @@ export function Pet({ anchor }: { anchor: "desktop" | "status" }) {
   const targetRef = useRef<number | null>(null);
   const busyUntil = useRef(0);
   const idleRef = useRef(Date.now());
+  const lastChatter = useRef(0);
   const dragTrail = useRef<{ x: number; y: number; t: number }[]>([]);
   const quipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wokeRef = useRef(false);
   const pokeTimes = useRef<number[]>([]);
   const dragTimes = useRef<number[]>([]);
+  // pry remarks on navigation: one unique line per thing opened.
+  // location subscription (buffer/cwd/ws) + explicit pry-say events
+  // (signal node clicks). 25s cooldown; silent unless idle + free.
+  const locRef = useRef("");
+  const retryRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!petOn) return;
+    const onSay = (e: Event) => {
+      const s = useShell.getState();
+      if (s.petMode === "sleep" || actRef.current !== "none" || document.hidden) return;
+      if (Date.now() - lastChatter.current < 12000) return;
+      lastChatter.current = Date.now();
+      say((e as CustomEvent<string>).detail, 2800);
+    };
+    window.addEventListener("pry-say", onSay);
+    const unsub = useShell.subscribe((s) => {
+      const key = `${s.phase}|${s.desktopWs}|${s.activeBuffer}|${s.cwd}`;
+      if (key === locRef.current) return;
+      // don't consume deep-links (?open=) set before entry: only track
+      // locations observed inside the app, so entering with a deep link
+      // still greets the thing once the workstation is up.
+      if (s.phase !== "app") return;
+      const line = openLineFor(s.activeBuffer ?? s.cwd ?? "", s.desktopWs);
+      if (!line) { locRef.current = key; return; }
+      // eligible → speak + consume. asleep/busy → DON'T consume: retry
+      // once the pet is free (otherwise the sleep race eats the line).
+      if (s.petMode === "idle" && actRef.current === "none" && Date.now() - lastChatter.current > 25000) {
+        locRef.current = key;
+        lastChatter.current = Date.now();
+        say(line, 3000);
+        return;
+      }
+      if (retryRef.current) clearTimeout(retryRef.current);
+      // self-rearming (≤4 attempts): covers back-to-back hops where the
+      // previous line's cooldown is still fresh at the first retry.
+      let attempts = 0;
+      const retry = () => {
+        const st = useShell.getState();
+        const k2 = `${st.phase}|${st.desktopWs}|${st.activeBuffer}|${st.cwd}`;
+        if (k2 !== key || locRef.current === key) return;
+        if (st.phase === "app" && st.petMode === "idle" && actRef.current === "none"
+          && Date.now() - lastChatter.current > 8000) {
+          locRef.current = key;
+          lastChatter.current = Date.now();
+          say(line, 3000);
+          return;
+        }
+        if (++attempts < 4) retryRef.current = window.setTimeout(retry, 9000);
+      };
+      retryRef.current = window.setTimeout(retry, 9000);
+    });
+    return () => { window.removeEventListener("pry-say", onSay); unsub(); };
+  }, [petOn]);
   const mouseRef = useRef({ x: -9999, y: -9999 });
   // gaze personality: pry sometimes watches the cursor, sometimes ignores it,
   // occasionally glances elsewhere on his own. Refs only — never rerenders.
@@ -379,8 +433,13 @@ export function Pet({ anchor }: { anchor: "desktop" | "status" }) {
         hold(3200);
         if (Math.random() < 0.3) say(prySay(pickPool()));
         setTimeout(() => {}, 3200);
-      } else if (r < 0.705) {
-        say(prySay(pickPool()));
+      } else if (r < 0.80) {
+        // idle chatter: pry says whatever he wants, unprompted.
+        // 45s cooldown keeps it a personality, not a notification.
+        if (Date.now() - lastChatter.current > 45000) {
+          lastChatter.current = Date.now();
+          say(prySay(pickPool()), 2800);
+        }
       }
       // else: keep idling — silence is normal (blink handled in draw)
     }, 5000);

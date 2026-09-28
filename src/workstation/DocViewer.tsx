@@ -10,7 +10,7 @@ import { sound } from "@/audio/engine";
      zoom / fit / download / open-original. Page nav via #page=.
    - image: proper zoom + fit surface (no pretending images are PDFs).
    - external artifacts: deliberate "open ↗" (arXiv paper, etc.).
-   Used by: resume.pdf (×2), DIPEX evidence, any future image evidence. */
+   Used by: evidence PDFs + images, research manuscript + deck. */
 
 export function DocViewer({ src, title, kind, pages = 1, caption, downloadName }: {
   src: string;

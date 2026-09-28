@@ -61,7 +61,7 @@ export const projects: Project[] = [
     kind: "solo",
     visibility: "public",
     period: "Jun 2026 — Present",
-    status: "research · v3 system line active (paper line: frozen v2)",
+    status: "research · v3 system line active (paper line: final v2)",
     blurb:
       "A local-first memory layer for conversational AI. It sits between an OpenAI-compatible client and a model and turns long-running conversation state into explicit memory, retrieval, and maintenance machinery instead of treating the context window as if it were memory.",
     stack: ["Python", "PyTorch", "FastAPI", "PostgreSQL + pgvector", "SQLAlchemy", "Docker", "Ollama"],
@@ -381,7 +381,7 @@ export const projects: Project[] = [
   /* ── practice · software ── */
   {
     slug: "ds-practice",
-    domain: "AI/ML",
+    domain: "SOFTWARE",
     name: "DS-Practice",
     bucket: "practice",
     track: "software",

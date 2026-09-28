@@ -212,27 +212,24 @@ await page.waitForTimeout(800);
 convo = await page.getByLabel("agent conversation").innerText();
 check("unknown does not hallucinate", /not sure|don't have an answer|couldn't map|won't invent/.test(convo));
 
-// 13. resume download fires a real download
-await page.getByLabel("file explorer").getByText("resume.pdf", { exact: true }).click();
-await page.waitForTimeout(400);
+// 13. evidence download fires a real download (DIPEX state-final cert)
+await page.goto("http://127.0.0.1:3001/?open=~/about/evidence/dipex/state-final.pdf", { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(1500);
 const dl = page.waitForEvent("download", { timeout: 5000 }).catch(() => null);
 await page.getByRole("link", { name: /download/i }).click();
-check("resume download works", (await dl) !== null);
+check("evidence download works", (await dl) !== null);
 
-// 14. research: single artifact + real arxiv action
-const expandIfCollapsed = async (n) => {
-  const b = page.getByRole("button", { name: new RegExp(`expand ${n}`) });
-  if (await b.count()) { await b.click(); await page.waitForTimeout(250); }
-};
-await expandIfCollapsed("research");
-await page.getByLabel("file explorer").getByText("lsrep-ice/", { exact: true }).click();
-await page.waitForTimeout(400);
-await expandIfCollapsed("lsrep-ice");
-await page.getByLabel("file explorer").getByText("README.md", { exact: true }).first().click();
-await page.waitForTimeout(400);
+// 14. research: artifacts + real arxiv action (deep-link the READMEs directly)
+await page.goto("http://127.0.0.1:3001/?open=~/research/lsrep-ice/README.md", { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(1500);
 const arxivHref = await page.locator("main").getByRole("link", { name: /arXiv/i }).first().getAttribute("href").catch(() => null);
 check("arxiv action is real", arxivHref === "https://arxiv.org/abs/2609.16730");
-check("no plural papers", !(await page.locator("main").innerText()).includes("ice-v2 manuscript") || true);
+const lsrepText = await page.locator("main").innerText().catch(() => "");
+check("ice arch details present", lsrepText.includes("four typed stores") && lsrepText.includes("32% fewer fragments"));
+await page.goto("http://127.0.0.1:3001/?open=~/research/pixel-over-paper/README.md", { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(1500);
+const popText = await page.locator("main").innerText().catch(() => "");
+check("pixel-over-paper writeup", /multicon 2024/i.test(popText) && popText.includes("Shruti Pant"));
 const noTimeline = await page.getByLabel("file explorer").getByText("timeline.log", { exact: true }).count().catch(() => 0);
 check("no timeline.log", noTimeline === 0);
 const noNow = await page.getByLabel("file explorer").getByText("now.md", { exact: true }).count().catch(() => 0);
@@ -496,9 +493,10 @@ await page.keyboard.press("ArrowLeft");
 await page.waitForTimeout(500);
 const rootList = await page.getByRole("listbox").innerText().catch(() => "");
 check("35 root listing", rootList.includes("research/") && rootList.includes("oss/"));
+check("35 about first", rootList.indexOf("about/") !== -1 && rootList.indexOf("about/") < rootList.indexOf("projects/"));
 await page.keyboard.press("l");
 await page.waitForTimeout(500);
-check("35b right enters section", (await page.getByLabel("file navigation").innerText()).includes("projects"));
+check("35b right enters section", (await page.getByLabel("file navigation").innerText()).includes("about"));
 
 // 35c. login hint teaches keys, dismisses
 await page.goto("http://127.0.0.1:3001/", { waitUntil: "domcontentloaded" });
@@ -573,7 +571,10 @@ await page.waitForTimeout(3600);
 const nodeCount39 = await page.getByLabel("graph canvas").getAttribute("data-nodes");
 check("39 graph story nodes", Number(nodeCount39) >= 30);
 
-// 40. signal pointer accuracy across zoom/pan states (dev-only ?signal-debug handle)
+// 40. signal coordinate consistency: screen() projector vs nodeAt() hit-test
+// agree across zoom/pan states (NOTE: this proves the event pipeline is
+// self-consistent — it does NOT validate the CSS cursor artwork hotspot;
+// that is §41 below, tested against upstream pixels, not our own code.)
 await page.goto("http://127.0.0.1:3001/?signal-debug", { waitUntil: "domcontentloaded" });
 await page.waitForTimeout(1500);
 await page.getByRole("button", { name: /enter guest session/i }).click().catch(() => {});
@@ -645,6 +646,153 @@ check("40h click selects node", await page.getByRole("button", { name: /open in 
   await page.waitForTimeout(1300);
 }
 check("40i dblclick opens artifact", await page.getByLabel("file navigation").count().catch(() => 0) >= 1);
+
+// 41. cursor-hotspot validation against UPSTREAM art (not our own mapping).
+// (a) node-side: hotspots.json + cursors.css must equal the vendored
+// upstream source (gen-cursors --check does this; re-asserted here so the
+// suite fails if anyone hand-edits css). (b) in-browser pixels: each
+// hotspot must land on opaque art, near the real tip/center of the PNG.
+{
+  const { readFileSync } = await import("node:fs");
+  const hot = JSON.parse(readFileSync("public/cursors/hotspots.json", "utf8"));
+  const up = JSON.parse(readFileSync("scripts/cursor-hotspots-upstream.json", "utf8"));
+  const css = readFileSync("src/app/cursors.css", "utf8");
+  let mapOk = true;
+  for (const [role, s] of Object.entries(up.roles)) {
+    const want = [Math.round(s.x), Math.round(s.y)];
+    const have = hot[role] ?? [];
+    if (have[0] !== want[0] || have[1] !== want[1]) mapOk = false;
+    if (!css.includes(`/cursors/${role}.png") ${want[0]} ${want[1]}`)) mapOk = false;
+  }
+  check("41a hotspot mapping == upstream verbatim", mapOk);
+  const px = await page.evaluate(async (hotspots) => {
+    const out = {};
+    for (const [role, [hx, hy]] of Object.entries(hotspots)) {
+      const img = new Image();
+      img.src = `/cursors/${role}.png`;
+      await img.decode();
+      const c = document.createElement("canvas");
+      c.width = img.width; c.height = img.height;
+      const g = c.getContext("2d");
+      g.drawImage(img, 0, 0);
+      const d = g.getImageData(0, 0, c.width, c.height).data;
+      const A = (x, y) => (x < 0 || y < 0 || x >= c.width || y >= c.height ? 0 : d[(y * c.width + x) * 4 + 3]);
+      let minX = 99, minY = 99, maxX = -1, maxY = -1, topY = 99, topX = -1;
+      for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++) {
+        if (A(x, y) > 128) {
+          if (x < minX) minX = x; if (x > maxX) maxX = x;
+          if (y < minY) minY = y; if (y > maxY) maxY = y;
+          if (y < topY) { topY = y; topX = x; }
+        }
+      }
+      out[role] = {
+        hotAlpha: A(hx, hy),
+        tipDist: Math.hypot(hx - topX, hy - topY),
+        ctrDist: Math.hypot(hx - (minX + maxX) / 2, hy - (minY + maxY) / 2),
+      };
+    }
+    return out;
+  }, { default: hot.default, pointer: hot.pointer, grab: hot.grab, grabbing: hot.grabbing, text: hot.text, "zoom-in": hot["zoom-in"] });
+  const tipRoles = ["default", "pointer"];
+  const ctrRoles = ["grab", "grabbing", "text", "zoom-in"];
+  let pxOk = true;
+  for (const r of [...tipRoles, ...ctrRoles]) {
+    if (px[r].hotAlpha < 200) pxOk = false;
+  }
+  for (const r of tipRoles) if (px[r].tipDist > 6) pxOk = false;
+  for (const r of ["grab", "grabbing", "text"]) if (px[r].ctrDist > 3) pxOk = false;
+  // zoom-in: the handle skews the opaque bbox, so the true center (13,13)
+  // sits ~3.9px off bbox-center — assert inside-bbox + on-art instead.
+  if (px["zoom-in"].ctrDist > 4.5) pxOk = false;
+  check("41b hotspots land on art (tip/center)", pxOk);
+  console.log("CURSOR-PX " + JSON.stringify(px));
+}
+
+// 42. real geometry assertions on the deterministic canonical layout.
+{
+  const m1 = await page.evaluate(() => window.__signal.measure());
+  console.log("SIGNAL-GEOM " + JSON.stringify(m1));
+  check("42a no NaN/Infinity", m1.nan === false);
+  check("42b flagships all visible", m1.flagsVisible === m1.flagsTotal && m1.flagsTotal > 0);
+  const minMargin = Math.min(m1.margins.L, m1.margins.R, m1.margins.T, m1.margins.B);
+  check("42c min margin >= 24px", minMargin >= 24);
+  check("42d occupancy sane", m1.occX >= 0.45 && m1.occX <= 0.98 && m1.occY >= 0.5 && m1.occY <= 0.98);
+  check("42e content aspect 1.4-1.85", m1.aspect >= 1.4 && m1.aspect <= 1.85);
+  // determinism: reload → identical world bounds
+  await page.goto("http://127.0.0.1:3001/?signal-debug", { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(1200);
+  await page.getByRole("button", { name: /enter guest session/i }).click().catch(() => {});
+  await page.waitForTimeout(1500);
+  await page.keyboard.press("Alt+3");
+  await page.waitForTimeout(2500);
+  const m2 = await page.evaluate(() => window.__signal.measure());
+  check("42f deterministic reload", JSON.stringify(m1.world) === JSON.stringify(m2.world));
+}
+
+// 43. real user zoom (wheel events), not setView — anchor stability,
+// hover-after-zoom, pan+wheel+hover, fit/0 restores canonical geometry.
+{
+  const box = await page.getByLabel("graph canvas").boundingBox();
+  const scr = async (id) => page.evaluate((i) => window.__signal.screen(i), id);
+  const p1 = await scr("router");
+  await page.mouse.move(box.x + p1[0], box.y + p1[1]);
+  await page.waitForTimeout(250);
+  await page.mouse.wheel(0, -480);
+  await page.waitForTimeout(400);
+  const p2 = await scr("router");
+  const anchorDrift = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]);
+  check("43a wheel zoom anchors under pointer", anchorDrift <= 4);
+  check("43b hover correct after wheel", (await page.evaluate(() => window.__signal.hover())) === "router");
+  // real drag-pan, then hover still correct
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 120, box.y + box.height / 2 + 60, { steps: 8 });
+  await page.mouse.up();
+  await page.waitForTimeout(300);
+  const p3 = await scr("router");
+  await page.mouse.move(box.x + p3[0], box.y + p3[1]);
+  await page.waitForTimeout(250);
+  check("43c pan + hover still correct", (await page.evaluate(() => window.__signal.hover())) === "router");
+  // fit via the 0 key restores canonical geometry
+  await page.mouse.click(box.x + 14, box.y + 14);
+  await page.waitForTimeout(200);
+  await page.keyboard.press("0");
+  await page.waitForTimeout(400);
+  const v = await page.evaluate(() => {
+    const s = window.__signal;
+    return { k: s.view.current.k, fk: s.fitK.current, pct: s.pct() };
+  });
+  check("43d fit/0 restores 100%", Math.abs(v.k - v.fk) < 1e-6 && v.pct === "100%");
+  const sigHead2 = await page.getByLabel("signal knowledge graph").innerText().catch(() => "");
+  check("43e header back at 100%", /100%/.test(sigHead2));
+}
+
+// 45. pry says one unique line per thing (location subscription).
+// ws2 entry → orbit line. poll: the pet may take the 9s retry path if it
+// was mid-animation when the workspace changed; bubble shows ~3s.
+{
+  await page.keyboard.press("Alt+1");
+  await page.waitForTimeout(1000);
+  await page.keyboard.press("Alt+2");
+  let heard = false;
+  for (let i = 0; i < 80 && !heard; i++) {
+    heard = await page.getByText("five clean hits").count().then((n) => n > 0).catch(() => false);
+    if (!heard) await page.waitForTimeout(500);
+  }
+  check("45 pry greets orbit uniquely", heard);
+}
+
+// 44. the tested build IS the repo HEAD (dev serves the working tree).
+{
+  const { execSync } = await import("node:child_process");
+  const sha = execSync("git rev-parse --short HEAD", { encoding: "utf8" }).trim();
+  let clean = true;
+  try {
+    execSync("git diff --quiet -- src/apps/Constellation.tsx src/app/cursors.css public/cursors/ scripts/ src/system/pry.ts src/system/Pet.tsx src/content/research.ts src/vfs/vfs.ts", { stdio: "ignore" });
+  } catch { clean = false; }
+  check("44 tested tree == committed HEAD", clean);
+  console.log("BUILD-SHA " + sha + (clean ? " clean" : " DIRTY"));
+}
 
 console.log(results.join("\n"));
 await browser.close();

@@ -175,7 +175,7 @@ export default function Page() {
           p: () => s.navTo(`${HOME}/projects`),
           r: () => s.navTo(`${HOME}/research/lsrep-ice`),
           o: () => s.navTo(`${HOME}/oss`),
-          v: () => s.openFile(`${HOME}/resume.pdf`, "pdf"),
+          v: () => s.navTo(`${HOME}/about`),
           a: () => s.navTo(`${HOME}/about`),
           c: () => s.toggle("contactOpen"),
         };

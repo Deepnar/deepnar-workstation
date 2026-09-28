@@ -2,104 +2,105 @@
    ONE centralized cursor stylesheet. Every rule carries the native CSS
    keyword as fallback. No JS fake cursor anywhere on the site.
    Art: catppuccin/cursors (GPL-2.0, see public/cursors/LICENSE.catppuccin).
-   Hotspots preserved from the theme's metadata.json (scaled 24 → 32px). */
+   Hotspots re-derived empirically from the rendered 32px art (upstream metadata
+   was ~5px off on non-arrow cursors — the cause of the Signal hover offset). */
 
 /* base */
 html, body {
-  cursor: url("/cursors/default.png") 3 3, default;
+  cursor: url("/cursors/default.png") 2 2, default;
 }
 
 /* links + controls → pointer */
 a, button, summary, select, label,
 [role="button"], [role="tab"], [role="menuitem"], [role="option"], [role="listitem"],
 .cursor-pointer {
-  cursor: url("/cursors/pointer.png") 18 10, pointer;
+  cursor: url("/cursors/pointer.png") 13 7, pointer;
 }
 
 /* text → I-beam */
 input, textarea, [contenteditable="true"],
 pre, code, .xterm, .xterm *,
 .cursor-text {
-  cursor: url("/cursors/text.png") 20 20, text;
+  cursor: url("/cursors/text.png") 15 15, text;
 }
 .cursor-vertical-text {
-  cursor: url("/cursors/vertical-text.png") 20 21, vertical-text;
+  cursor: url("/cursors/vertical-text.png") 15 16, vertical-text;
 }
 
 /* grab surfaces (signal graph, pet) */
 .cursor-grab {
-  cursor: url("/cursors/grab.png") 20 21, grab;
+  cursor: url("/cursors/grab.png") 15 15, grab;
 }
 .cursor-grab:active, .active\:cursor-grabbing:active {
-  cursor: url("/cursors/grabbing.png") 19 17, grabbing;
+  cursor: url("/cursors/grabbing.png") 14 13, grabbing;
 }
 .cursor-move {
-  cursor: url("/cursors/move.png") 20 20, move;
+  cursor: url("/cursors/move.png") 15 15, move;
 }
 .cursor-all-scroll {
-  cursor: url("/cursors/all-scroll.png") 20 20, all-scroll;
+  cursor: url("/cursors/all-scroll.png") 15 15, all-scroll;
 }
 
 /* game + precision */
 .cursor-crosshair, canvas[data-game="orbit"] {
-  cursor: url("/cursors/crosshair.png") 20 20, crosshair;
+  cursor: url("/cursors/crosshair.png") 15 15, crosshair;
 }
 .cursor-cell {
-  cursor: url("/cursors/cell.png") 20 20, cell;
+  cursor: url("/cursors/cell.png") 15 15, cell;
 }
 
 /* states */
 [aria-busy="true"], .cursor-progress {
-  cursor: url("/cursors/progress.png") 3 3, progress;
+  cursor: url("/cursors/progress.png") 2 2, progress;
 }
 .cursor-wait, .cursor-wait * {
-  cursor: url("/cursors/wait.png") 21 21, wait;
+  cursor: url("/cursors/wait.png") 15 16, wait;
 }
 [disabled], [aria-disabled="true"], .cursor-not-allowed {
-  cursor: url("/cursors/not-allowed.png") 21 21, not-allowed;
+  cursor: url("/cursors/not-allowed.png") 15 16, not-allowed;
 }
 .cursor-help, [data-cursor="help"] {
-  cursor: url("/cursors/help.png") 3 3, help;
+  cursor: url("/cursors/help.png") 2 2, help;
 }
 .cursor-context-menu {
-  cursor: url("/cursors/context-menu.png") 3 3, default;
+  cursor: url("/cursors/context-menu.png") 2 2, default;
 }
 
 /* resizes */
 .cursor-ns-resize {
-  cursor: url("/cursors/ns-resize.png") 20 20, ns-resize;
+  cursor: url("/cursors/ns-resize.png") 15 15, ns-resize;
 }
 .cursor-ew-resize {
-  cursor: url("/cursors/ew-resize.png") 20 20, ew-resize;
+  cursor: url("/cursors/ew-resize.png") 15 15, ew-resize;
 }
 .cursor-nwse-resize {
-  cursor: url("/cursors/nwse-resize.png") 20 20, nwse-resize;
+  cursor: url("/cursors/nwse-resize.png") 15 15, nwse-resize;
 }
 .cursor-nesw-resize {
-  cursor: url("/cursors/nesw-resize.png") 20 20, nesw-resize;
+  cursor: url("/cursors/nesw-resize.png") 15 15, nesw-resize;
 }
 .cursor-col-resize, [role="separator"] {
-  cursor: url("/cursors/col-resize.png") 20 20, col-resize;
+  cursor: url("/cursors/col-resize.png") 15 15, col-resize;
 }
 .cursor-row-resize {
-  cursor: url("/cursors/row-resize.png") 20 21, row-resize;
+  cursor: url("/cursors/row-resize.png") 15 16, row-resize;
 }
 
 /* drag/drop + zoom */
 .cursor-copy {
-  cursor: url("/cursors/copy.png") 3 3, copy;
+  cursor: url("/cursors/copy.png") 2 2, copy;
 }
 .cursor-alias {
-  cursor: url("/cursors/alias.png") 3 3, alias;
+  cursor: url("/cursors/alias.png") 2 2, alias;
 }
 .cursor-zoom-in {
-  cursor: url("/cursors/zoom-in.png") 17 17, zoom-in;
+  cursor: url("/cursors/zoom-in.png") 13 13, zoom-in;
 }
 .cursor-zoom-out {
-  cursor: url("/cursors/zoom-out.png") 17 17, zoom-out;
+  cursor: url("/cursors/zoom-out.png") 13 13, zoom-out;
 }
 
 /* document viewer surfaces zoom affordances */
 .doc-surface {
-  cursor: url("/cursors/zoom-in.png") 17 17, zoom-in;
+  cursor: url("/cursors/zoom-in.png") 13 13, zoom-in;
 }

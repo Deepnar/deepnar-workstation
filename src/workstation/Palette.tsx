@@ -47,19 +47,6 @@ const catFor = (n: VNode): string => {
   return n.kind === "dir" ? "dir" : "file";
 };
 
-function downloadResume() {
-  try {
-    const a = document.createElement("a");
-    a.href = "/resume/Deepesh_Sonar_Resume.pdf";
-    a.download = "Deepesh_Sonar_Resume.pdf";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-  } catch {
-    /* noop */
-  }
-}
-
 export function Palette() {
   const { paletteOpen, toggle, navTo, openFile } = useShell();
   const [q, setQ] = useState("");
@@ -94,8 +81,7 @@ export function Palette() {
         ["contact", () => s.toggle("contactOpen")],
         ["settings", () => s.toggle("settingsOpen")],
         ["help / keybindings", () => s.toggle("helpOpen")],
-        ["resume (open pdf)", () => s.openFile(`${HOME}/resume.pdf`, "pdf")],
-        ["resume (download)", () => { downloadResume(); s.notify("resume downloaded"); sound.download(); }],
+        ["background (about + evidence)", () => s.navTo(`${HOME}/about`)],
         ["pet on/off", () => s.setPet(!s.petOn)],
         ["desktop: workstation", () => { s.setDesktopWs(1); s.setPhase("app"); }],
         ["desktop: orbit", () => { s.setDesktopWs(2); s.setPhase("app"); }],

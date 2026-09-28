@@ -73,7 +73,7 @@ export function execCommand(raw: string, cwd: string): { lines: TermLine[]; cwd:
       return ok([
         out("fs:        ls · tree · cd · pwd · cat · open · find · grep"),
         out("buffers:   :e <path> · :bd"),
-        out("go:        home · projects · research · oss · about · resume · contact"),
+        out("go:        home · about · projects · research · oss · contact"),
         out("system:    neofetch · btop · history · clear (c)"),
         out("agent:     ask <question>  (local index, offline)"),
         out("fun:       fortune · uname -a · man deepnar · pet · radio"),
@@ -107,9 +107,9 @@ export function execCommand(raw: string, cwd: string): { lines: TermLine[]; cwd:
     case "open": {
       if (!arg) return bad(`usage: ${cmd} <path>`);
       if (arg === "resume.pdf" || arg.endsWith("resume.pdf")) {
-        s.openFile(`${HOME}/resume.pdf`, "pdf");
-        sound.fileOpen();
-        return ok([out("opened ~/resume.pdf — [ open ] [ download ↓ ]")]);
+        s.navTo(`${HOME}/about`);
+        sound.nav();
+        return ok([out("no CV file — the record lives in ~/about (README + notable.md + evidence/)")]);
       }
       const target = resolvePath(cwd, arg);
       const node = findNode(target);
@@ -207,8 +207,8 @@ export function execCommand(raw: string, cwd: string): { lines: TermLine[]; cwd:
     case "theme":
       return ok([out("light only — the workstation retired dark mode.", "dim")]);
     case "resume":
-      s.openFile(`${HOME}/resume.pdf`, "pdf");
-      return ok([out("opened ~/resume.pdf")]);
+      s.navTo(`${HOME}/about`);
+      return ok([out("no CV file — the record lives in ~/about (README + notable.md + evidence/)")]);
     case "contact":
       s.toggle("contactOpen");
       return ok([out("contact panel opened.")]);
@@ -239,11 +239,9 @@ export function execCommand(raw: string, cwd: string): { lines: TermLine[]; cwd:
       return ok([]);
     case "download":
       if (arg.includes("resume") || arg === "") {
-        s.notify("resume downloaded");
-        sound.download();
-        return { lines: [out("resume.pdf → downloads (sanitized public CV)")], cwd, action: { type: "download", url: "/resume/Deepesh_Sonar_Resume.pdf", filename: "Deepesh_Sonar_Resume.pdf" } };
+        return bad("no CV file. evidence lives per-item under ~/about/evidence — `ls ~/about/evidence`.");
       }
-      return bad("usage: download resume.pdf");
+      return bad("usage: download <path> — try a file under ~/about/evidence");
     case "history":
       return ok([out("(this shell keeps history with ↑↓ — session only)", "dim")]);
     case "c":
