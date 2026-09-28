@@ -173,8 +173,8 @@ export function MiniCalendar() {
   const [hover, setHover] = useState<CalDay | null>(null);
   return (
     <div>
-      <div className="pb-1">
-        <div className="flex gap-[2px]">
+      <div className="pb-1 max-w-full overflow-x-auto">
+        <div className="flex gap-[2px] w-max max-w-none">
           {weeks.map((w, i) => (
             <div key={i} className="flex flex-col gap-[2px]">
               {w.map((d) => (
@@ -226,12 +226,13 @@ export function HomeView() {
   const { recent, openFile } = useShell();
   const recentShown = (recent.length > 0 ? recent : [`${HOME}/projects/ice/README.md`, `${HOME}/research/lsrep-ice/README.md`, `${HOME}/oss/merged/mne-python-14283.md`]).slice(0, 5);
   return (
-    <div className="h-full flex flex-col items-center justify-center px-6 py-5 overflow-auto">
+    <div className="h-full overflow-auto px-6 py-5">
+      <div className="min-h-full flex flex-col items-center justify-center">
       <BlockLogo />
       <div className="text-[12.5px] mt-2 mb-1" style={{ color: "var(--muted)" }}>{profile.tagline}</div>
       <div className="text-[11px] mb-3" style={{ color: "var(--faint)" }}>Deepesh Sonar · AI Systems · Research · Software Engineering</div>
-      <div className="w-full max-w-2xl grid gap-4 md:grid-cols-2">
-        <div role="list" aria-label="quick actions">
+      <div className="w-full max-w-2xl grid gap-4 md:grid-cols-2 justify-items-center md:justify-items-stretch">
+        <div role="list" aria-label="quick actions" className="w-full max-w-[300px] md:max-w-none">
           {ACTIONS.map((a) => (
             <button key={a.key} role="listitem" onClick={() => { sound.select(); a.run(); }}
               className="w-full flex items-center gap-3 px-3 py-[5px] text-[13px] text-left hover:bg-[var(--sel-bg)]">
@@ -240,7 +241,7 @@ export function HomeView() {
             </button>
           ))}
         </div>
-        <div>
+        <div className="w-full max-w-[300px] md:max-w-none">
           <div className="text-[10.5px] uppercase tracking-[0.16em] px-3 mb-1" style={{ color: "var(--muted)" }}>recent</div>
           {recentShown.map((r) => (
             <button key={r} onClick={() => { const n = findNode(r); if (n) { sound.fileOpen(); openFile(r, n.kind); } }}
@@ -258,6 +259,7 @@ export function HomeView() {
       </div>
       <div className="w-full max-w-2xl mt-2 flex flex-col items-center">
         <AchievementsStrip />
+      </div>
       </div>
     </div>
   );
