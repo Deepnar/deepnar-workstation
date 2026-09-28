@@ -686,12 +686,29 @@ export function Constellation() {
 
     let dragNode: GNode | null = null;
     let panning = false, lx = 0, ly = 0, moved = false;
+    // two-pointer pinch: zoom about the midpoint. mouse path untouched —
+    // this branch only runs when two pointers are down (touch).
+    const pinch = new Map<number, { x: number; y: number }>();
+    let pinchDist = 0;
+    const abortSingleGesture = () => {
+      if (dragNode) { dragNode.fx = null; dragNode.fy = null; sim.alphaTarget(0); dragNode = null; }
+      panning = false;
+      moved = true; // a pinch is not a tap: never (de)select on release
+    };
     const onDown = (e: PointerEvent) => {
       if (!settled) settleEntrance();
       if (!geometryReady) return;
       markTouched();
       cv.setPointerCapture(e.pointerId);
       const p = at(e);
+      pinch.set(e.pointerId, p);
+      if (pinch.size === 2) {
+        abortSingleGesture();
+        const [a, b] = [...pinch.values()];
+        pinchDist = Math.hypot(a.x - b.x, a.y - b.y);
+        return;
+      }
+      if (pinch.size > 2) return;
       dragNode = pickNode(p.x, p.y);
       if (dragNode) {
         activeId = dragNode.id;
@@ -704,6 +721,23 @@ export function Constellation() {
     const onMove = (e: PointerEvent) => {
       const p = at(e);
       dbgEvt.x = p.x; dbgEvt.y = p.y;
+      if (pinch.has(e.pointerId)) pinch.set(e.pointerId, p);
+      if (pinch.size === 2) {
+        const [a, b] = [...pinch.values()];
+        const d = Math.hypot(a.x - b.x, a.y - b.y);
+        if (pinchDist > 0 && d > 0) {
+          const v = viewRef.current;
+          const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+          const [wx, wy] = toWorld(mx, my);
+          v.k = Math.min(3, Math.max(0.3, v.k * (d / pinchDist)));
+          v.x = wx - (mx - W / 2) / v.k;
+          v.y = wy - (my - H / 2) / v.k;
+          setZoom(Math.round(v.k * 100) / 100);
+        }
+        pinchDist = d;
+        moved = true;
+        return;
+      }
       if (dragNode) {
         const [wx, wy] = toWorld(p.x, p.y);
         dragNode.fx = wx; dragNode.fy = wy;
@@ -720,6 +754,15 @@ export function Constellation() {
       }
     };
     const onUp = (e: PointerEvent) => {
+      pinch.delete(e.pointerId);
+      if (pinch.size > 0) {
+        // pinch ending: re-anchor any remaining pointer so nothing jumps.
+        const [r] = [...pinch.values()];
+        lx = r.x; ly = r.y;
+        if (!dragNode) panning = true;
+        try { cv.releasePointerCapture(e.pointerId); } catch { /* noop */ }
+        return;
+      }
       if (dragNode) {
         dragNode.fx = null; dragNode.fy = null;
         sim.alphaTarget(0);
@@ -770,6 +813,7 @@ export function Constellation() {
     cv.addEventListener("pointerdown", onDown);
     cv.addEventListener("pointermove", onMove);
     cv.addEventListener("pointerup", onUp);
+    cv.addEventListener("pointercancel", onUp);
     cv.addEventListener("wheel", onWheel, { passive: false });
     cv.addEventListener("dblclick", onDbl);
     window.addEventListener("keydown", onKey);
@@ -780,6 +824,7 @@ export function Constellation() {
       cv.removeEventListener("pointerdown", onDown);
       cv.removeEventListener("pointermove", onMove);
       cv.removeEventListener("pointerup", onUp);
+      cv.removeEventListener("pointercancel", onUp);
       cv.removeEventListener("wheel", onWheel);
       cv.removeEventListener("dblclick", onDbl);
       window.removeEventListener("keydown", onKey);
@@ -803,7 +848,8 @@ export function Constellation() {
     <div className="h-full flex flex-col min-h-0" aria-label="signal knowledge graph">
       <div className="px-4 py-2 text-[12.5px] border-b shrink-0 flex items-center gap-3 flex-wrap" style={{ borderColor: "var(--border)", color: "var(--muted)" }}>
         <span className="font-bold" style={{ color: "var(--fg)" }}>SIGNAL</span>
-        <span className="hidden sm:inline">drag to move · wheel to zoom · double-click opens · shift+click pins a path</span>
+        <span className="hidden sm:inline coarse-hidden">drag to move · wheel to zoom · double-click opens · shift+click pins a path</span>
+        <span className="hidden coarse-inline">drag to move · pinch to zoom · tap a node, then open</span>
         <span className="hidden md:flex items-center gap-2 ml-2">
           {legend.map((l) => (
             <span key={l.label} className="flex items-center gap-1 text-[11px]">

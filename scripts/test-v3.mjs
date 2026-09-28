@@ -563,7 +563,7 @@ await page.getByRole("button", { name: /enter guest session/i }).click().catch((
 await page.waitForTimeout(1800);
 await page.getByTitle("home").click().catch(() => {});
 await page.waitForTimeout(500);
-check("38 achievements", await page.getByRole("list", { name: "github achievements" }).getByRole("listitem").count().then((n) => n === 5).catch(() => false));
+check("38 achievements", await page.getByRole("list", { name: "github achievements" }).getByRole("listitem").count().then((n) => n === 6).catch(() => false));
 
 // 39. signal graph: temporal story scale
 await page.keyboard.press("Alt+3");

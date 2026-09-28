@@ -84,6 +84,10 @@ export function XTerminal({ sessionId, hidden }: { sessionId: string; hidden: bo
       }
     };
     window.addEventListener("resize", onResize);
+    // mobile virtual keyboard changes the visual viewport without a window
+    // resize — refit so the prompt stays usable. harmless on desktop.
+    const vv = window.visualViewport;
+    vv?.addEventListener("resize", onResize);
     // click-anywhere focuses
     const focus = () => term.focus();
     el.addEventListener("click", focus);
@@ -91,6 +95,7 @@ export function XTerminal({ sessionId, hidden }: { sessionId: string; hidden: bo
     if (!hidden) setTimeout(() => term.focus(), 50);
     return () => {
       window.removeEventListener("resize", onResize);
+      try { vv?.removeEventListener("resize", onResize); } catch { /* noop */ }
       el.removeEventListener("click", focus);
       term.dispose();
       termRef.current = null;

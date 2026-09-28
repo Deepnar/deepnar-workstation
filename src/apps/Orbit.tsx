@@ -25,6 +25,42 @@ export function Orbit() {
   const pausedRef = useRef(false);
   const [top, setTop] = useState<number[]>([]);
   const [topOpen, setTopOpen] = useState(false);
+  const [touchUI, setTouchUI] = useState(false);
+  const [portrait, setPortrait] = useState(false);
+  const [portraitHintOff, setPortraitHintOff] = useState(false);
+  useEffect(() => {
+    // touch controls only where touch is the primary input; desktop untouched.
+    try {
+      const mq = window.matchMedia("(pointer: coarse)");
+      const om = window.matchMedia("(orientation: portrait)");
+      const sync = () => { setTouchUI(mq.matches); setPortrait(om.matches); };
+      sync();
+      mq.addEventListener("change", sync);
+      om.addEventListener("change", sync);
+      return () => { mq.removeEventListener("change", sync); om.removeEventListener("change", sync); };
+    } catch { /* noop */ }
+    return undefined;
+  }, []);
+  // pause shared by Esc and the touch pause button (single source of truth).
+  const togglePause = () => {
+    pausedRef.current = !pausedRef.current;
+    setPaused(pausedRef.current);
+    sound.toggle();
+  };
+  const togglePauseRef = useRef(togglePause);
+  togglePauseRef.current = togglePause;
+  // hold-to-thrust: feeds the SAME keys set the keyboard uses. release stops.
+  const hold = (key: string) => ({
+    onPointerDown: (e: React.PointerEvent<HTMLButtonElement>) => {
+      e.preventDefault();
+      try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* noop */ }
+      stateRef.current.keys.add(key);
+    },
+    onPointerUp: () => { stateRef.current.keys.delete(key); },
+    onPointerCancel: () => { stateRef.current.keys.delete(key); },
+    onLostPointerCapture: () => { stateRef.current.keys.delete(key); },
+    onContextMenu: (e: React.SyntheticEvent) => { e.preventDefault(); },
+  });
   const submittedRef = useRef(false);
   const stateRef = useRef({
     bodies: [] as Body[], particles: [] as Particle[], pops: [] as Pop[], rings: [] as Ring[],
@@ -91,9 +127,7 @@ export function Orbit() {
     const down = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
-        pausedRef.current = !pausedRef.current;
-        setPaused(pausedRef.current);
-        sound.toggle();
+        togglePauseRef.current();
         return;
       }
       if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(e.key)) e.preventDefault();
@@ -332,13 +366,43 @@ export function Orbit() {
     };
     cv.addEventListener("touchmove", touch, { passive: true });
 
+    // orientation/resize: keep the backing store matched to the real box.
+    // steady-state rendering is unchanged; this only corrects stale sizes.
+    let ro: ResizeObserver | null = null;
+    try {
+      ro = new ResizeObserver(() => {
+        const w = Math.floor(cv.clientWidth * 2), h = Math.floor(cv.clientHeight * 2);
+        if (w > 10 && h > 10 && (cv.width !== w || cv.height !== h)) {
+          cv.width = w; cv.height = h;
+          st.px = Math.min(Math.max(st.px, 0), w);
+          st.py = Math.min(Math.max(st.py, 0), h);
+        }
+      });
+      ro.observe(cv);
+    } catch { /* noop */ }
+
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener("keydown", down);
       window.removeEventListener("keyup", up);
       cv.removeEventListener("touchmove", touch);
+      try { ro?.disconnect(); } catch { /* noop */ }
     };
   }, [over === true ? 1 : 0]);
+
+  // debug oracle (same pattern as ?signal-debug): ?orbit-debug exposes input
+  // + game state so touch controls are verifiable without guessing pixels.
+  useEffect(() => {
+    try {
+      if (!new URLSearchParams(window.location.search).has("orbit-debug")) return;
+      (window as unknown as { __orbit?: unknown }).__orbit = {
+        keys: () => [...stateRef.current.keys],
+        paused: () => pausedRef.current,
+        score: () => stateRef.current.score,
+        ship: () => ({ x: stateRef.current.px, y: stateRef.current.py, vx: stateRef.current.vx, vy: stateRef.current.vy }),
+      };
+    } catch { /* noop */ }
+  }, []);
 
   return (
     <div className="h-full flex flex-col min-h-0" aria-label="orbit game">
@@ -394,8 +458,31 @@ export function Orbit() {
             </button>
           </div>
         )}
-        <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" tabIndex={0}
+        <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" tabIndex={0} style={{ touchAction: "none" }}
           onKeyDown={(e) => { if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(e.key)) e.preventDefault(); }} />
+        {touchUI && !over && (
+          <>
+            <div className="absolute left-3 bottom-3 z-10 grid grid-cols-3 gap-1.5 select-none" role="group" aria-label="thrust controls" style={{ touchAction: "none", paddingBottom: "env(safe-area-inset-bottom)" }}>
+              <span />
+              <button aria-label="thrust up" className="w-12 h-12 border text-[18px]" style={{ background: "color-mix(in srgb, var(--surface) 78%, transparent)", borderColor: "var(--border)", color: "var(--fg-dim)" }} {...hold("arrowup")}>▲</button>
+              <span />
+              <button aria-label="thrust left" className="w-12 h-12 border text-[18px]" style={{ background: "color-mix(in srgb, var(--surface) 78%, transparent)", borderColor: "var(--border)", color: "var(--fg-dim)" }} {...hold("arrowleft")}>◀</button>
+              <button aria-label="thrust down" className="w-12 h-12 border text-[18px]" style={{ background: "color-mix(in srgb, var(--surface) 78%, transparent)", borderColor: "var(--border)", color: "var(--fg-dim)" }} {...hold("arrowdown")}>▼</button>
+              <button aria-label="thrust right" className="w-12 h-12 border text-[18px]" style={{ background: "color-mix(in srgb, var(--surface) 78%, transparent)", borderColor: "var(--border)", color: "var(--fg-dim)" }} {...hold("arrowright")}>▶</button>
+            </div>
+            <div className="absolute right-3 bottom-3 z-10 flex gap-1.5 select-none" style={{ touchAction: "none", paddingBottom: "env(safe-area-inset-bottom)" }}>
+              <button aria-label="brake" className="w-12 h-12 border text-[13px] font-bold" style={{ background: "color-mix(in srgb, var(--surface) 78%, transparent)", borderColor: "var(--accent)", color: "var(--accent-soft)" }} {...hold(" ")}>brake</button>
+              <button aria-label={paused ? "resume game" : "pause game"} className="w-12 h-12 border text-[16px]" style={{ background: "color-mix(in srgb, var(--surface) 78%, transparent)", borderColor: "var(--border)", color: "var(--fg-dim)" }}
+                onClick={() => { togglePause(); sound.tick(1); }}>{paused ? "▶" : "⏸"}</button>
+            </div>
+            {portrait && !portraitHintOff && (
+              <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 px-3 py-1.5 border text-[11.5px] whitespace-nowrap" style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--muted)" }} role="note">
+                <span>orbit plays better in landscape ↻</span>
+                <button aria-label="dismiss orientation hint" className="px-2 py-1" style={{ color: "var(--fg-dim)" }} onClick={() => setPortraitHintOff(true)}>✕</button>
+              </div>
+            )}
+          </>
+        )}
         {!over && count > 0 && (
           <div className="absolute inset-0 grid place-items-center pointer-events-none">
             <div className="text-[44px] font-bold tabular-nums px-6 py-2 border" style={{ color: "var(--fg)", background: "var(--surface)", borderColor: "var(--border)" }}>{count}</div>
@@ -413,13 +500,14 @@ export function Orbit() {
           <div className="absolute inset-0 grid place-items-center" style={{ background: "rgba(3,4,8,0.55)" }}>
             <div className="text-center space-y-1">
               <div className="text-[20px] font-bold" style={{ color: "var(--fg)" }}>hull breached · {score} signals</div>
-              <div className="text-[12px]" style={{ color: "var(--muted)" }}>arrows / wasd · space brakes · esc pauses · touch drags</div>
+              <div className="text-[12px]" style={{ color: "var(--muted)" }}>{touchUI ? "hold ▲▼◀▶ to thrust · brake slows you · drag also works" : "arrows / wasd · space brakes · esc pauses · touch drags"}</div>
             </div>
           </div>
         )}
       </div>
       <div className="px-4 py-1.5 text-[11.5px] border-t shrink-0" style={{ borderColor: "var(--border)", color: "var(--muted)" }}>
-        arrows / wasd to thrust · space to brake · esc pauses · catch ~ · dodge rock · 5 hits out
+        {touchUI ? "hold ▲▼◀▶ to thrust · brake slows you · catch ~ · dodge rock · 5 hits out"
+        : "arrows / wasd to thrust · space to brake · esc pauses · catch ~ · dodge rock · 5 hits out"}
       </div>
     </div>
   );

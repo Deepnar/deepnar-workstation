@@ -51,8 +51,8 @@ export default function NotFound() {
   }, []);
   return (
     <main
-      className="min-h-screen flex items-center justify-center p-6"
-      style={{ background: "var(--bg0)", color: "var(--fg)", fontFamily: "var(--font-mono), monospace" }}
+      className="flex items-center justify-center p-6"
+      style={{ minHeight: "100dvh", background: "var(--bg0)", color: "var(--fg)", fontFamily: "var(--font-mono), monospace" }}
       aria-label="page not found"
     >
       <div className="max-w-md w-full border p-6" style={{ background: "var(--bg)", borderColor: "var(--border)" }}>

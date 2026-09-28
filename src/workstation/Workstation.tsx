@@ -96,6 +96,7 @@ function TabNav({ explorerRef, small, drawerOpen, onToggleDrawer }: {
         return (
           <div
             key={b} role="tab" aria-selected={active}
+            ref={active ? (el) => { try { el?.scrollIntoView({ block: "nearest", inline: "nearest" }); } catch { /* noop */ } } : undefined}
             onClick={() => { if (b === HOME) useShell.getState().openHomeTab(); else if (node) openFile(b, node.kind); }}
             onMouseDown={(e) => {
               if (e.button === 1) {
@@ -201,10 +202,6 @@ function Browser() {
   const { cwd, navTo, navUp, selected, setSelected, openFile, listFocusNonce } = useShell();
   const nodes = useMemo(() => listDir(cwd), [cwd]);
   const small = useSmallScreen();
-  // small screens: list XOR preview (no side-by-side squeeze). any file
-  // choice opens the preview; ‹ back returns to the list.
-  const [showPreview, setShowPreview] = useState(false);
-  useEffect(() => { setShowPreview(false); }, [cwd]);
   const selIdx = Math.max(0, nodes.findIndex((n) => n.path === (selected ?? previewDefault(nodes))));
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -231,10 +228,14 @@ function Browser() {
     if (n.kind === "dir") {
       sound.nav();
       navTo(n.path);
+    } else if (small) {
+      // phone: a file tap OPENS + reveals (drawer auto-closes via
+      // activeBuffer). dir taps navigate. no select-then-wonder state.
+      sound.fileOpen();
+      openFile(n.path, n.kind);
     } else {
       sound.select();
       setSelected(n.path);
-      if (small) setShowPreview(true);
     }
   };
   const activate = (n: VNode) => {
@@ -263,19 +264,6 @@ function Browser() {
 
   return (
     <div className="h-full flex flex-col min-h-0">
-      {small && showPreview && preview ? (
-        <div className="flex-1 min-h-0 flex flex-col">
-          <div className="shrink-0 border-b" style={{ borderColor: "var(--border)" }}>
-            <button
-              aria-label="back to file list" onClick={() => setShowPreview(false)}
-              className="px-3 py-2.5 text-[13px]" style={{ color: "var(--accent-soft)" }}
-            >‹ {shortPath(cwd)}</button>
-          </div>
-          <div className="flex-1 min-h-0 overflow-auto">
-            <PreviewPane path={preview} />
-          </div>
-        </div>
-      ) : (
       <Group orientation="horizontal" className="flex-1 min-h-0" onLayoutChange={(l) => { try { localStorage.setItem("deepnar-browser-split", JSON.stringify(l)); } catch { /* noop */ } }}>
         <Panel id="listing" defaultSize="55" minSize="30">
           <div
@@ -314,7 +302,6 @@ function Browser() {
           </div>
         </Panel>
       </Group>
-      )}
     </div>
   );
 }
@@ -504,7 +491,8 @@ function Drawer({ label, onClose, children }: { label: string; onClose: () => vo
     ref.current?.querySelector("button")?.focus({ preventScroll: true });
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keyup", onKey);
+    return () => { window.removeEventListener("keydown", onKey); window.removeEventListener("keyup", onKey); };
   }, [onClose]);
   return createPortal(
     <>
@@ -528,9 +516,12 @@ function Drawer({ label, onClose, children }: { label: string; onClose: () => vo
 
 function Sheet({ label, onClose, children }: { label: string; onClose: () => void; children: React.ReactNode }) {
   useEffect(() => {
+    // keyup too: xterm consumes keydown Escape inside the terminal, but the
+    // keyup still bubbles — either one closes the topmost sheet.
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keyup", onKey);
+    return () => { window.removeEventListener("keydown", onKey); window.removeEventListener("keyup", onKey); };
   }, [onClose]);
   return createPortal(
     <>
@@ -560,6 +551,10 @@ export function Workstation() {
   const small = useSmallScreen();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const toggleDrawer = () => { sound.toggle(); setDrawerOpen((v) => !v); };
+  // phone: opening any file reveals it immediately — a lingering drawer over
+  // fresh content reads as "nothing happened". dir nav never touches buffers.
+  const activeBuffer = useShell((s) => s.activeBuffer);
+  useEffect(() => { setDrawerOpen((v) => (v ? false : v)); }, [activeBuffer]);
   // leaving small screens closes transient overlays; entering keeps desktop intact
   const wasSmall = useRef(small);
   useEffect(() => {

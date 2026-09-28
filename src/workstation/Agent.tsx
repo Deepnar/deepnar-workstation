@@ -198,6 +198,7 @@ export function Agent({ hidden }: { hidden: boolean }) {
           placeholder="ask about this workstation…"
           aria-label="agent input"
           autoComplete="off"
+          onFocus={() => { try { inputRef.current?.scrollIntoView({ block: "nearest" }); } catch { /* noop */ } }}
           className="flex-1 min-w-0 px-2 py-1.5 text-[12.5px] bg-transparent outline-none border"
           style={{ borderColor: "var(--border)", color: "var(--fg)" }}
         />
