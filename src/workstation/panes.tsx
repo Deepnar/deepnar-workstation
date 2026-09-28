@@ -310,7 +310,7 @@ export function OssView() {
     openFile(`${HOME}/oss/${p.state}/${p.repo.split("/")[1].toLowerCase()}-${p.url.split("/").pop()}.md`, "markdown");
   };
   return (
-    <div className="h-full grid grid-cols-[minmax(150px,220px)_minmax(200px,1fr)_minmax(220px,1.2fr)] min-h-0 text-[12.5px]" role="region" aria-label="open source browser">
+    <div className="h-full oss-grid grid grid-cols-[minmax(150px,220px)_minmax(200px,1fr)_minmax(220px,1.2fr)] min-h-0 text-[12.5px]" role="region" aria-label="open source browser">
       <div ref={repoRef} className="border-r overflow-auto min-h-0 outline-none" style={{ borderColor: "var(--border)", boxShadow: pane === "repos" ? "inset 2px 0 0 var(--accent)" : "none" }} tabIndex={0}
         aria-label="repositories" data-active={pane === "repos" ? "true" : undefined}
         onKeyDown={(e) => {

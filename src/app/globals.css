@@ -270,4 +270,18 @@ html[data-motion="off"] *::after {
   transition: none !important;
 }
 
-/* ── retired JS-cursor overrides (native Catppuccin CSS cursors now) ── */
+/* ── small screens (<640px): same workstation, drawer-adapted ── */
+@media (max-width: 639px) {
+  /* oss browser: stack repo list / lanes / detail vertically */
+  .oss-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-auto-rows: max-content;
+    overflow-y: auto;
+  }
+  .oss-grid > div { border-right: none !important; border-bottom: 1px solid var(--border); overflow: visible !important; }
+  /* touch-sized rows in file lists */
+  [role="tree"] [role="treeitem"] > div:first-child { min-height: 36px; }
+  /* buffer tabs scroll instead of squeezing */
+  [aria-label="buffer tabs"] { overflow-x: auto; scrollbar-width: none; }
+  [aria-label="buffer tabs"]::-webkit-scrollbar { display: none; }
+}

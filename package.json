@@ -1,7 +1,8 @@
 {
   "name": "deepnar-workstation",
   "version": "0.1.0",
-  "private": true,
+  "private": false,
+  "license": "MIT",
   "description": "Deepesh Sonar's portfolio as a browser-based research/development workstation.",
   "scripts": {
     "dev": "next dev",

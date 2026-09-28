@@ -137,7 +137,15 @@ let termId = 0;
 let dockId = 0;
 
 function loadSettings(): Settings {
-  const base: Settings = { motion: true, vimKeys: false, sound: true, ambient: false, volume: 0.35, petRoam: true, petSize: 1 };
+  // OS reduced-motion seeds the default (explicit user toggle still wins
+  // once stored — this only applies when no saved preference exists).
+  let motion = true;
+  try {
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) motion = false;
+  } catch {
+    /* SSR / old browsers */
+  }
+  const base: Settings = { motion, vimKeys: false, sound: true, ambient: false, volume: 0.35, petRoam: true, petSize: 1 };
   try {
     const raw = localStorage.getItem("deepnar-settings");
     if (raw) return { ...base, ...JSON.parse(raw) };

@@ -44,14 +44,38 @@ function Header() {
 }
 
 /* ── tabnav: arrows/home + buffer tabs + crumb in ONE bar ── */
-function TabNav({ explorerRef }: { explorerRef: React.RefObject<PanelImperativeHandle | null> }) {
+/* ── responsive: small screens get drawer explorer + overlay dock ── */
+export function useSmallScreen() {
+  const [small, setSmall] = useState(() => {
+    try { return window.matchMedia("(max-width: 639px)").matches; }
+    catch { return false; }
+  });
+  useEffect(() => {
+    let mq: MediaQueryList | null = null;
+    const onChange = (e: MediaQueryListEvent) => setSmall(e.matches);
+    try {
+      mq = window.matchMedia("(max-width: 639px)");
+      mq.addEventListener("change", onChange);
+    } catch { /* noop */ }
+    return () => { try { mq?.removeEventListener("change", onChange); } catch { /* noop */ } };
+  }, []);
+  return small;
+}
+
+function TabNav({ explorerRef, small, drawerOpen, onToggleDrawer }: {
+  explorerRef: React.RefObject<PanelImperativeHandle | null>;
+  small: boolean;
+  drawerOpen: boolean;
+  onToggleDrawer: () => void;
+}) {
   const { dockVisible, setDockVisible, openBuffers, activeBuffer, openFile, closeBuffer } = useShell();
   const btn = "p-1.5 hover:text-[var(--fg)] shrink-0";
   return (
     <div className="flex items-center gap-0.5 pl-1 pr-2 py-[3px] border-b text-[12px] shrink-0 min-w-0" style={{ borderColor: "var(--border)" }} aria-label="buffer tabs">
       <button
-        className={btn} title="toggle file tree" aria-label="toggle file tree"
+        className={btn} title="toggle file tree" aria-label="toggle file tree" aria-expanded={small ? drawerOpen : undefined}
         onClick={() => {
+          if (small) { onToggleDrawer(); return; }
           const p = explorerRef.current;
           if (!p) return;
           if (p.isCollapsed()) p.expand();
@@ -176,6 +200,11 @@ function Explorer() {
 function Browser() {
   const { cwd, navTo, navUp, selected, setSelected, openFile, listFocusNonce } = useShell();
   const nodes = useMemo(() => listDir(cwd), [cwd]);
+  const small = useSmallScreen();
+  // small screens: list XOR preview (no side-by-side squeeze). any file
+  // choice opens the preview; ‹ back returns to the list.
+  const [showPreview, setShowPreview] = useState(false);
+  useEffect(() => { setShowPreview(false); }, [cwd]);
   const selIdx = Math.max(0, nodes.findIndex((n) => n.path === (selected ?? previewDefault(nodes))));
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -205,6 +234,7 @@ function Browser() {
     } else {
       sound.select();
       setSelected(n.path);
+      if (small) setShowPreview(true);
     }
   };
   const activate = (n: VNode) => {
@@ -233,6 +263,19 @@ function Browser() {
 
   return (
     <div className="h-full flex flex-col min-h-0">
+      {small && showPreview && preview ? (
+        <div className="flex-1 min-h-0 flex flex-col">
+          <div className="shrink-0 border-b" style={{ borderColor: "var(--border)" }}>
+            <button
+              aria-label="back to file list" onClick={() => setShowPreview(false)}
+              className="px-3 py-2.5 text-[13px]" style={{ color: "var(--accent-soft)" }}
+            >‹ {shortPath(cwd)}</button>
+          </div>
+          <div className="flex-1 min-h-0 overflow-auto">
+            <PreviewPane path={preview} />
+          </div>
+        </div>
+      ) : (
       <Group orientation="horizontal" className="flex-1 min-h-0" onLayoutChange={(l) => { try { localStorage.setItem("deepnar-browser-split", JSON.stringify(l)); } catch { /* noop */ } }}>
         <Panel id="listing" defaultSize="55" minSize="30">
           <div
@@ -271,6 +314,7 @@ function Browser() {
           </div>
         </Panel>
       </Group>
+      )}
     </div>
   );
 }
@@ -297,7 +341,7 @@ function Main() {
 
 /* ── right utility dock: terminal tabs + agent + web.
    Visibility (header toggle) never destroys sessions or history. */
-function Dock() {
+function Dock({ bare = false }: { bare?: boolean }) {
   const { dockTabs, activeDock, setActiveDock, closeDock, openDock, terms } = useShell();
   const [plus, setPlus] = useState(false);
   const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
@@ -305,7 +349,7 @@ function Dock() {
   if (!dockTabs.length) {
     return (
       <section aria-label="utility dock" className="h-full flex flex-col min-h-0 border-l" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-        <div className="px-3 pt-2 pb-1 text-[10.5px] uppercase tracking-[0.16em]" style={{ color: "var(--muted)" }}>utility dock</div>
+        {!bare && <div className="px-3 pt-2 pb-1 text-[10.5px] uppercase tracking-[0.16em]" style={{ color: "var(--muted)" }}>utility dock</div>}
         <div className="flex-1 flex flex-col items-stretch justify-center gap-1 p-3">
           {([["term", "new terminal", "shell · files · git"], ["agent", "agent", "ask about the work"], ["web", "web lookup", "google · chatgpt · github"]] as const).map(([kind, label, hint]) => (
             <button key={kind} onClick={() => { openDock(kind); sound.select(); }}
@@ -453,10 +497,75 @@ function Statusline() {
   );
 }
 
+/* ── small-screen overlays: explorer drawer + dock sheet ── */
+function Drawer({ label, onClose, children }: { label: string; onClose: () => void; children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    ref.current?.querySelector("button")?.focus({ preventScroll: true });
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  return createPortal(
+    <>
+      <div className="fixed inset-0 z-[60]" style={{ background: "rgba(20,18,14,0.6)" }} onClick={onClose} aria-hidden />
+      <div
+        ref={ref} role="dialog" aria-modal="true" aria-label={label}
+        className="fixed inset-y-0 left-0 z-[61] w-[86vw] max-w-[330px] flex flex-col border-r"
+        style={{ background: "var(--bg)", borderColor: "var(--border)" }}
+        onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
+      >
+        <div className="flex items-center justify-between px-3 py-2 border-b shrink-0" style={{ borderColor: "var(--border)" }}>
+          <span className="text-[11px] uppercase tracking-[0.16em]" style={{ color: "var(--muted)" }}>{label}</span>
+          <button aria-label={`close ${label}`} onClick={onClose} className="px-3 py-2 text-[14px]" style={{ color: "var(--fg-dim)" }}>✕</button>
+        </div>
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">{children}</div>
+      </div>
+    </>,
+    document.body,
+  );
+}
+
+function Sheet({ label, onClose, children }: { label: string; onClose: () => void; children: React.ReactNode }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  return createPortal(
+    <>
+      <div className="fixed inset-0 z-[60]" style={{ background: "rgba(20,18,14,0.6)" }} onClick={onClose} aria-hidden />
+      <div
+        role="dialog" aria-modal="true" aria-label={label}
+        className="fixed inset-x-0 bottom-0 top-[8vh] z-[61] flex flex-col border-t rounded-t-[10px]"
+        style={{ background: "var(--bg)", borderColor: "var(--border)" }}
+        onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
+      >
+        <div className="flex items-center justify-between px-3 py-2 border-b shrink-0" style={{ borderColor: "var(--border)" }}>
+          <span className="text-[11px] uppercase tracking-[0.16em]" style={{ color: "var(--muted)" }}>{label}</span>
+          <button aria-label={`close ${label}`} onClick={onClose} className="px-3 py-2 text-[14px]" style={{ color: "var(--fg-dim)" }}>✕</button>
+        </div>
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">{children}</div>
+      </div>
+    </>,
+    document.body,
+  );
+}
+
 /* ── workstation ── */
 export function Workstation() {
   const explorerPanel = usePanelRef();
   const dockVisible = useShell((s) => s.dockVisible);
+  const setDockVisible = useShell((s) => s.setDockVisible);
+  const small = useSmallScreen();
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const toggleDrawer = () => { sound.toggle(); setDrawerOpen((v) => !v); };
+  // leaving small screens closes transient overlays; entering keeps desktop intact
+  const wasSmall = useRef(small);
+  useEffect(() => {
+    if (!small && wasSmall.current) { setDrawerOpen(false); }
+    wasSmall.current = small;
+  }, [small]);
   // panel resize handles must never take keyboard focus — arrows belong to lists
   useEffect(() => {
     document.querySelectorAll("[role='separator']").forEach((el) => {
@@ -474,7 +583,24 @@ export function Workstation() {
   return (
     <div className="flex-1 flex flex-col min-h-0 min-w-0">
       <Header />
-      <TabNav explorerRef={explorerPanel} />
+      <TabNav explorerRef={explorerPanel} small={small} drawerOpen={drawerOpen} onToggleDrawer={toggleDrawer} />
+      {small ? (
+        <div className="flex-1 min-h-0 flex flex-col min-w-0">
+          <main id="main" className="flex-1 min-h-0 min-w-0 overflow-auto" aria-label="workspace">
+            <Main />
+          </main>
+          {drawerOpen && (
+            <Drawer label="files" onClose={() => setDrawerOpen(false)}>
+              <Explorer />
+            </Drawer>
+          )}
+          {dockVisible && (
+            <Sheet label="utility dock" onClose={() => setDockVisible(false)}>
+              <Dock bare />
+            </Sheet>
+          )}
+        </div>
+      ) : (
       <div className="flex-1 min-h-0">
         <Group
           orientation="horizontal"
@@ -504,6 +630,7 @@ export function Workstation() {
           )}
         </Group>
       </div>
+      )}
       <Statusline />
     </div>
   );
