@@ -23,10 +23,10 @@ const mono = "DejaVu Sans Mono, ui-monospace, monospace";
 const svg =
 `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640">
 <rect width="1280" height="640" fill="#f4f2ec"/>
-<rect x="28" y="28" width="1224" height="584" fill="none" stroke="#3a354d" stroke-width="2"/>
-<rect x="28" y="28" width="1224" height="52" fill="#e9e4d6"/>
-<circle cx="62" cy="54" r="7" fill="#8b90a7"/><circle cx="88" cy="54" r="7" fill="#8b90a7"/><circle cx="114" cy="54" r="7" fill="#7c8aff"/>
-<text x="140" y="61" font-family="${mono}" font-size="22" fill="#3a354d">deepnar@orien — ~/workstation</text>
+<rect x="48" y="48" width="1184" height="544" fill="none" stroke="#3a354d" stroke-width="2"/>
+<rect x="48" y="48" width="1184" height="52" fill="#e9e4d6"/>
+<circle cx="82" cy="74" r="7" fill="#8b90a7"/><circle cx="108" cy="74" r="7" fill="#8b90a7"/><circle cx="134" cy="74" r="7" fill="#7c8aff"/>
+<text x="160" y="81" font-family="${mono}" font-size="22" fill="#3a354d">deepnar@orien — ~/workstation</text>
 <image href="data:image/png;base64,${wordmarkB64}" x="290" y="130" width="700" height="257"/>
 <text x="640" y="432" text-anchor="middle" font-family="${mono}" font-size="34" letter-spacing="14" fill="#7c8aff">WORKSTATION</text>
 <text x="640" y="474" text-anchor="middle" font-family="${mono}" font-size="22" fill="#3a354d">AI Systems · Research · Software Engineering</text>

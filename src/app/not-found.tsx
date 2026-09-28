@@ -19,7 +19,12 @@ const LINES = [
    the OS asks for reduced motion. No workstation runtime imported. */
 export default function NotFound() {
   const cvRef = useRef<HTMLCanvasElement>(null);
-  const [line] = useState(() => LINES[Math.floor(Math.random() * LINES.length)]);
+  // fixed initial line: the random pick happens post-mount, otherwise the
+  // server render and the client hydration disagree (hydration mismatch).
+  const [line, setLine] = useState(LINES[0]);
+  useEffect(() => {
+    setLine(LINES[Math.floor(Math.random() * LINES.length)]);
+  }, []);
   useEffect(() => {
     const cv = cvRef.current;
     if (!cv) return;

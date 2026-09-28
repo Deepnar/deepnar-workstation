@@ -154,7 +154,10 @@ export function Waybar() {
         <button title="find anything (ctrl+k)" onClick={() => toggle("paletteOpen")} className="p-1.5 hover:text-[var(--fg)]" style={{ color: "var(--muted)" }} aria-label="search"><Search size={17} /></button>
       )}
       <button title="sound on/off" onClick={() => { try { setSettings({ sound: !soundOn }); } catch {} sound.select(); }} className="p-1.5 hover:text-[var(--fg)]" style={{ color: "var(--muted)" }} aria-label="sound">{soundOn ? <Volume2 size={17} /> : <VolumeX size={17} />}</button>
-      <button title="help (?)" onClick={() => toggle("helpOpen")} className="p-1.5 hover:text-[var(--fg)]" style={{ color: "var(--muted)" }} aria-label="help"><CircleHelp size={17} /></button>
+      <span className="relative inline-flex">
+        <button title="help (?)" onClick={() => toggle("helpOpen")} className="p-1.5 hover:text-[var(--fg)]" style={{ color: "var(--muted)" }} aria-label="help"><CircleHelp size={17} /></button>
+        <LoginHint />
+      </span>
       {phase !== "greeter" && (
         <button title="log out (back to greeter)" onClick={() => { sound.appClose(); logout(); }} className="p-1.5 hover:text-[var(--fg)]" style={{ color: "var(--muted)" }} aria-label="log out"><LogOut size={17} /></button>
       )}
@@ -304,7 +307,6 @@ export function SystemRoot() {
           <WaybarHost />
           <Palette />
           <Onboarding />
-          <LoginHint />
           <Contact />
           <Help />
           <Settings />
@@ -351,8 +353,8 @@ function LoginHint() {
     ["?", "all keys"],
   ];
   return (
-    <div className="fixed top-11 right-3 z-50 w-[240px]" role="note" aria-label="keyboard hint">
-      <div className="text-right pr-14 text-[14px] leading-none" style={{ color: "var(--accent)" }} aria-hidden>▲</div>
+    <div className="absolute right-0 top-full mt-1 z-50 w-[240px]" role="note" aria-label="keyboard hint">
+      <div className="text-right pr-3 text-[14px] leading-none" style={{ color: "var(--accent)" }} aria-hidden>▲</div>
       <div className="border px-3 py-2.5 -mt-1 text-[12px] space-y-1" style={{ background: "var(--surface)", borderColor: "var(--accent)" }}>
         <div className="font-bold" style={{ color: "var(--fg)" }}>everything is keys <span style={{ color: "var(--muted)" }}>— ? for more</span></div>
         {rows.map(([k, what]) => (

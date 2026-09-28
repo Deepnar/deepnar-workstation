@@ -11,6 +11,12 @@ export interface Achievement {
 
 export const achievements: Achievement[] = [
   {
+    slug: "starstruck",
+    name: "Starstruck",
+    img: "/achievements/starstruck.png",
+    meaning: "Created a repository that earned 16 stars.",
+  },
+  {
     slug: "quickdraw",
     name: "Quickdraw",
     img: "/achievements/quickdraw.png",
@@ -32,8 +38,8 @@ export const achievements: Achievement[] = [
     slug: "pull-shark",
     name: "Pull Shark",
     tier: "×2",
-    img: "/achievements/pull-shark-x2.png",
-    meaning: "Merged pull requests — bronze tier (×2).",
+    img: "/achievements/pull-shark.png",
+    meaning: "Merged pull requests (×2). Default blue tier — the ×2 is a count, not bronze.",
   },
   {
     slug: "pair-extraordinaire",
