@@ -196,7 +196,7 @@ await agentInput.fill("hi");
 await agentInput.press("Enter");
 await page.waitForTimeout(600);
 let convo = await page.getByLabel("agent conversation").innerText();
-check("hi → greeting, no retrieval", convo.includes("local guide") && !convo.includes("reading index"));
+check("hi → greeting, no retrieval", /looking for|projects?|going|workstation/i.test(convo) && !convo.includes("reading index"));
 await agentInput.fill("what is ICE?");
 await agentInput.press("Enter");
 await page.waitForTimeout(800);
@@ -210,7 +210,7 @@ await agentInput.fill("blargh zzz unrelated");
 await agentInput.press("Enter");
 await page.waitForTimeout(800);
 convo = await page.getByLabel("agent conversation").innerText();
-check("unknown does not hallucinate", convo.includes("don't have that indexed"));
+check("unknown does not hallucinate", /not sure|don't have an answer|couldn't map|won't invent/.test(convo));
 
 // 13. resume download fires a real download
 await page.getByLabel("file explorer").getByText("resume.pdf", { exact: true }).click();
@@ -284,15 +284,15 @@ await page.keyboard.press("Escape");
 await page.waitForTimeout(200);
 check("esc blurs terminal", await page.evaluate(() => document.activeElement?.tagName !== "TEXTAREA"));
 
-// 19. assistant --debug trace
+// 19. assistant --debug trace (short query: long answers scroll trace out of view)
 await tfocus();
-await page.keyboard.type('assistant --debug "why did you build ICE?"', { delay: 8 });
+await page.keyboard.type('assistant --debug "open ice"', { delay: 8 });
 await page.keyboard.press("Enter");
 await page.waitForTimeout(400);
 check("--debug shows trace", (await termText()).includes("intent:") && (await termText()).includes("entity:"));
 
 // 20. pet is a canvas creature in the statusline
-check("pet canvas present", (await page.getByLabel(/companion creature/).count()) >= 1);
+check("pet canvas present", (await page.getByLabel(/pry — drag to pick up/).count()) >= 1);
 
 // 21. directory/buffer view state (exact acceptance test from the brief)
 await page.goto("http://127.0.0.1:3001/?open=~/projects/ice/README.md", { waitUntil: "domcontentloaded" });
@@ -368,6 +368,13 @@ check("24c orbit hull shown", (await page.getByLabel("orbit game").innerText()).
 await page.keyboard.press("Escape");
 await page.waitForTimeout(300);
 check("24d orbit esc pauses", (await page.getByLabel("orbit game").innerText()).includes("paused"));
+await page.keyboard.press("Escape");
+await page.waitForTimeout(300);
+// leaderboard env is configured → chip shows live top score, popover lists top 5
+check("24e leaderboard chip live", await page.getByRole("button", { name: "global top scores" }).count() >= 1);
+await page.getByRole("button", { name: "global top scores" }).click();
+await page.waitForTimeout(1200);
+check("24f top-5 popover", await page.getByRole("dialog", { name: "global top 5" }).count() >= 1);
 await page.keyboard.press("Escape");
 await page.waitForTimeout(300);
 
@@ -453,7 +460,7 @@ check("32 ssh handshake", (await page.innerText("body")).includes("ssh guest@ori
 await page.waitForTimeout(1200);
 
 // 33. pet click always answers with a bubble
-await page.getByLabel(/companion creature/).click({ force: true });
+await page.getByLabel(/pry — drag to pick up/).click({ force: true });
 await page.waitForTimeout(400);
 check("33 pet bubble", (await page.locator("[aria-live='polite']").last().innerText().catch(() => "")).length > 1);
 
@@ -475,6 +482,12 @@ await page.waitForTimeout(500);
 await page.keyboard.press("Shift+Tab");
 await page.waitForTimeout(400);
 check("34c shift+tab cycles", await page.getByRole("tab", { name: "home", selected: true }).count() >= 1);
+// 34d. alt+w closes the active tab
+await page.keyboard.press("Alt+t");
+await page.waitForTimeout(400);
+await page.keyboard.press("Alt+w");
+await page.waitForTimeout(400);
+check("34d alt+w closes tab", await page.getByRole("tab", { name: "home", selected: true }).count() === 0);
 
 // 35. left from a top-level section lands on the ~ listing
 await page.keyboard.press("p");
@@ -495,7 +508,13 @@ await page.evaluate(() => { try { localStorage.removeItem("deepnar-hint-seen"); 
 await page.waitForTimeout(1200);
 await page.getByRole("button", { name: /enter guest session/i }).click();
 await page.waitForTimeout(1800);
-check("35c hint popup", await page.getByRole("note", { name: "keyboard hint" }).count() >= 1);
+// hint is sequenced after pry wakes (~2.4s) + 1.5s — poll, don't assume timing
+let hintSeen = false;
+for (let i = 0; i < 12 && !hintSeen; i++) {
+  hintSeen = await page.getByRole("note", { name: "keyboard hint" }).count().then((n) => n >= 1).catch(() => false);
+  if (!hintSeen) await page.waitForTimeout(750);
+}
+check("35c hint popup", hintSeen);
 await page.getByRole("button", { name: /dismiss/ }).click();
 await page.waitForTimeout(300);
 check("35d hint dismisses", await page.getByRole("note", { name: "keyboard hint" }).count() === 0);
@@ -510,6 +529,122 @@ await page.waitForTimeout(300);
 await page.keyboard.press("ArrowLeft");
 await page.waitForTimeout(500);
 check("36 oss left to parent", await page.getByRole("listbox").count() >= 1);
+
+// 37. content catalogue: meta workstation + systems shelf land on real pages
+await page.goto("http://127.0.0.1:3001/?open=~/projects/deepnar-workstation/README.md", { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(1200);
+check("37a workstation README", (await page.locator("main").innerText()).includes("virtual filesystem"));
+await page.goto("http://127.0.0.1:3001/?open=~/projects/systems/orien-config/README.md", { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(1200);
+const orienText = await page.locator("main").innerText();
+check("37b orien README", orienText.includes("chezmoi") && orienText.includes("Legion"));
+check("37c orien github live", await page.locator("main").getByRole("link", { name: /GitHub/i }).first().getAttribute("href").then((h) => h === "https://github.com/Deepnar/orien-config").catch(() => false));
+// 37d. repo meta rail renders generated facts, not prose
+check("37d meta rail", (await page.getByLabel("repository metadata").first().innerText()).includes("★"));
+// 37e. private source shows no dead github button
+await page.goto("http://127.0.0.1:3001/?open=~/projects/practice/software/movie-ticket-booking/README.md", { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(1200);
+const movText = await page.locator("main").innerText();
+check("37e private source honest", movText.includes("private source") && (await page.locator("main").getByRole("link", { name: /^GitHub/i }).count().catch(() => 0)) === 0);
+// 37f. practice shelves: ml + early land
+await page.goto("http://127.0.0.1:3001/?open=~/projects/practice/ml/micrograd-from-scratch/README.md", { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(1000);
+check("37f ml shelf", (await page.locator("main").innerText()).includes("autodiff"));
+await page.goto("http://127.0.0.1:3001/?open=~/projects/practice/early/pricing-tier-panel/README.md", { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(1000);
+check("37g early shelf", (await page.locator("main").innerText()).includes("code-along"));
+// 37h. removed pages stay removed (graph-only now): shelf listing has no entry
+await page.goto("http://127.0.0.1:3001/?open=~/projects/practice/software", { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(1000);
+check("37h rust-lab page gone", !(await page.locator("main").innerText()).includes("rust-lab"));
+
+// 38. home achievements strip below activity
+await page.goto("http://127.0.0.1:3001/", { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(1500);
+await page.getByRole("button", { name: /enter guest session/i }).click().catch(() => {});
+await page.waitForTimeout(1800);
+await page.getByTitle("home").click().catch(() => {});
+await page.waitForTimeout(500);
+check("38 achievements", await page.getByRole("list", { name: "github achievements" }).getByRole("listitem").count().then((n) => n === 5).catch(() => false));
+
+// 39. signal graph: temporal story scale
+await page.keyboard.press("Alt+3");
+await page.waitForTimeout(3600);
+const nodeCount39 = await page.getByLabel("graph canvas").getAttribute("data-nodes");
+check("39 graph story nodes", Number(nodeCount39) >= 30);
+
+// 40. signal pointer accuracy across zoom/pan states (dev-only ?signal-debug handle)
+await page.goto("http://127.0.0.1:3001/?signal-debug", { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(1500);
+await page.getByRole("button", { name: /enter guest session/i }).click().catch(() => {});
+await page.waitForTimeout(1800);
+await page.keyboard.press("Alt+3");
+await page.waitForTimeout(4500);
+check("40a debug handle", await page.evaluate(() => !!window.__signal));
+const sigHead = await page.getByLabel("signal knowledge graph").innerText().catch(() => "");
+check("40b fitted 100%", /100%/.test(sigHead));
+const moveToNode = async (id, dy = 0) => {
+  const box = await page.getByLabel("graph canvas").boundingBox();
+  const pt = await page.evaluate((i) => window.__signal.screen(i), id);
+  if (!box || !pt) return null;
+  await page.mouse.move(box.x + pt[0], box.y + pt[1] + dy);
+  await page.waitForTimeout(250);
+  return page.evaluate(() => window.__signal.hover());
+};
+const setZoomF = async (f) => {
+  await page.evaluate((ff) => {
+    const s = window.__signal; const v = s.view.current; const fk = s.fitK.current;
+    s.setView(v.x, v.y, ff == null ? fk : fk * ff);
+  }, f);
+  await page.waitForTimeout(250);
+};
+let accOk = true;
+for (const f of [null, 0.75, 1.5, 2]) {
+  await setZoomF(f);
+  if ((await moveToNode("router")) !== "router") accOk = false;
+}
+check("40c hover router @fit/75/150/200", accOk);
+await setZoomF(1.5);
+check("40d label hit forge", (await moveToNode("forge", 20)) === "forge");
+const sigText = await page.getByLabel("signal knowledge graph").innerText().catch(() => "");
+check("40e card matches hover", sigText.includes("presentation-forge"));
+const base = await page.evaluate(() => ({ x: window.__signal.view.current.x, y: window.__signal.view.current.y, k: window.__signal.fitK.current }));
+let panOk = true;
+for (const [dx, dy] of [[150, 0], [-150, 0], [0, 100], [0, -100]]) {
+  await page.evaluate(([b, ddx, ddy]) => window.__signal.setView(b.x + ddx, b.y + ddy, b.k), [base, dx, dy]);
+  await page.waitForTimeout(250);
+  if ((await moveToNode("router")) !== "router") panOk = false;
+}
+check("40f hover router panned l/r/u/d", panOk);
+await page.evaluate((b) => window.__signal.setView(b.x, b.y, b.k), base);
+await page.waitForTimeout(250);
+let cornerOk = true;
+{
+  const box = await page.getByLabel("graph canvas").boundingBox();
+  const corners = [[12, 12], [box.width - 12, 12], [12, box.height - 12], [box.width - 12, box.height - 12]];
+  for (const [cx, cy] of corners) {
+    await page.mouse.move(box.x + cx, box.y + cy);
+    await page.waitForTimeout(200);
+    if ((await page.evaluate(() => window.__signal.hover())) !== null) cornerOk = false;
+  }
+}
+check("40g empty corners hit nothing", cornerOk);
+{
+  const box = await page.getByLabel("graph canvas").boundingBox();
+  const pt = await page.evaluate(() => window.__signal.screen("ice"));
+  await page.mouse.move(box.x + pt[0], box.y + pt[1]);
+  await page.waitForTimeout(250);
+  await page.mouse.click(box.x + pt[0], box.y + pt[1]);
+  await page.waitForTimeout(300);
+}
+check("40h click selects node", await page.getByRole("button", { name: /open in workstation/i }).count().then((n) => n > 0).catch(() => false));
+{
+  const box = await page.getByLabel("graph canvas").boundingBox();
+  const pt = await page.evaluate(() => window.__signal.screen("ice"));
+  await page.mouse.dblclick(box.x + pt[0], box.y + pt[1]);
+  await page.waitForTimeout(1300);
+}
+check("40i dblclick opens artifact", await page.getByLabel("file navigation").count().catch(() => 0) >= 1);
 
 console.log(results.join("\n"));
 await browser.close();

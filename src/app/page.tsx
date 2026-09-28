@@ -105,6 +105,15 @@ export default function Page() {
         sound.select();
         return;
       }
+      if (e.altKey && e.key.toLowerCase() === "w") {
+        e.preventDefault();
+        ensureApp();
+        if (s.mainView === "buffer" && s.activeBuffer) {
+          s.closeBuffer(s.activeBuffer);
+          sound.fileClose();
+        }
+        return;
+      }
       if (e.altKey && ["1", "2", "3"].includes(e.key)) {
         e.preventDefault();
         ensureApp();

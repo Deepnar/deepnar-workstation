@@ -5,6 +5,7 @@
 // Arrows/WASD + Space (brake), Esc pauses, touch drag. Canvas only.
 import { useEffect, useRef, useState } from "react";
 import { sound } from "@/audio/engine";
+import { leaderboardOn, submitScore, topScores } from "@/lib/leaderboard";
 import { useShell } from "@/lib/store";
 
 interface Body { x: number; y: number; vx: number; vy: number; r: number; kind: "rock" | "signal"; hue: number }
@@ -22,6 +23,9 @@ export function Orbit() {
   const [count, setCount] = useState(3);
   const [paused, setPaused] = useState(false);
   const pausedRef = useRef(false);
+  const [top, setTop] = useState<number[]>([]);
+  const [topOpen, setTopOpen] = useState(false);
+  const submittedRef = useRef(false);
   const stateRef = useRef({
     bodies: [] as Body[], particles: [] as Particle[], pops: [] as Pop[], rings: [] as Ring[],
     px: 0, py: 0, vx: 0, vy: 0, angle: -Math.PI / 2, keys: new Set<string>(),
@@ -62,6 +66,8 @@ export function Orbit() {
     setLives(5);
     setPaused(false);
     setCount(3);
+    submittedRef.current = false;
+    if (leaderboardOn()) topScores(5).then(setTop).catch(() => {});
 
     const spawn = () => {
       const edge = Math.floor(Math.random() * 4);
@@ -180,6 +186,12 @@ export function Orbit() {
               if (st.lives <= 0) {
                 st.alive = false;
                 setOver(true);
+                if (leaderboardOn() && !submittedRef.current) {
+                  submittedRef.current = true;
+                  submitScore(st.score)
+                    .then(() => topScores(5).then(setTop).catch(() => {}))
+                    .catch(() => {});
+                }
                 setBest((bb) => {
                   const nb = Math.max(bb, st.score);
                   try {
@@ -337,6 +349,19 @@ export function Orbit() {
         <span title="hull" aria-label={`${lives} hull left`} className="tabular-nums" style={{ color: lives <= 2 ? "var(--err)" : undefined }}>
           {"♥".repeat(Math.max(0, lives))}{"♡".repeat(Math.max(0, 5 - lives))}
         </span>
+        {leaderboardOn() && (
+          <button title="global top 5" aria-label="global top scores" aria-expanded={topOpen}
+            className="px-1.5 tabular-nums hover:bg-[var(--sel-bg)]"
+            style={{ color: "var(--accent-soft)" }}
+            onClick={() => {
+              sound.tick(1);
+              const next = !topOpen;
+              setTopOpen(next);
+              if (next) topScores(5).then(setTop).catch(() => {});
+            }}>
+            👑{top.length > 0 ? ` ${top[0]}` : ""}
+          </button>
+        )}
         <span className="ml-auto tabular-nums">{over ? "done" : paused ? "paused" : "endless"}</span>
         <button title="hide to desktop" aria-label="minimize" className="px-2 hover:bg-[var(--sel-bg)]"
           style={{ color: "var(--muted)" }} onClick={() => { useShell.getState().setPhase("desktop"); }}>
@@ -350,6 +375,25 @@ export function Orbit() {
         )}
       </div>
       <div className="flex-1 min-h-0 relative">
+        {topOpen && (
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 px-4 py-2.5 border text-[12.5px] min-w-[190px]"
+            style={{ background: "var(--surface)", borderColor: "var(--border)" }} role="dialog" aria-label="global top 5">
+            <div className="font-bold mb-1.5" style={{ color: "var(--fg)" }}>global top 5 · all visitors</div>
+            {top.length === 0 ? (
+              <div style={{ color: "var(--muted)" }}>no flights logged yet — be the first.</div>
+            ) : (
+              top.map((s, i) => (
+                <div key={i} className="flex justify-between tabular-nums py-px">
+                  <span style={{ color: i === 0 ? "var(--accent-soft)" : "var(--muted)" }}>#{i + 1}</span>
+                  <span style={{ color: "var(--fg)" }}>{s}</span>
+                </div>
+              ))
+            )}
+            <button className="mt-1.5 text-[12px]" style={{ color: "var(--muted)" }} onClick={() => setTopOpen(false)}>
+              close ✕
+            </button>
+          </div>
+        )}
         <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" tabIndex={0}
           onKeyDown={(e) => { if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(e.key)) e.preventDefault(); }} />
         {!over && count > 0 && (

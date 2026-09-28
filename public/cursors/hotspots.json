@@ -1,0 +1,102 @@
+{
+ "default": [
+  3,
+  3
+ ],
+ "pointer": [
+  18,
+  10
+ ],
+ "text": [
+  20,
+  20
+ ],
+ "vertical-text": [
+  20,
+  21
+ ],
+ "grab": [
+  20,
+  21
+ ],
+ "grabbing": [
+  19,
+  17
+ ],
+ "move": [
+  20,
+  20
+ ],
+ "crosshair": [
+  20,
+  20
+ ],
+ "cell": [
+  20,
+  20
+ ],
+ "wait": [
+  21,
+  21
+ ],
+ "progress": [
+  3,
+  3
+ ],
+ "help": [
+  3,
+  3
+ ],
+ "not-allowed": [
+  21,
+  21
+ ],
+ "ns-resize": [
+  20,
+  20
+ ],
+ "ew-resize": [
+  20,
+  20
+ ],
+ "nwse-resize": [
+  20,
+  20
+ ],
+ "nesw-resize": [
+  20,
+  20
+ ],
+ "col-resize": [
+  20,
+  20
+ ],
+ "row-resize": [
+  20,
+  21
+ ],
+ "zoom-in": [
+  17,
+  17
+ ],
+ "zoom-out": [
+  17,
+  17
+ ],
+ "copy": [
+  3,
+  3
+ ],
+ "alias": [
+  3,
+  3
+ ],
+ "context-menu": [
+  3,
+  3
+ ],
+ "all-scroll": [
+  20,
+  20
+ ]
+}

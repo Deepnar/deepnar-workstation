@@ -1,6 +1,22 @@
 "use client";
 
 import type { VNode } from "@/vfs/vfs";
+import { useShell } from "@/lib/store";
+import { findNode } from "@/vfs/vfs";
+import { sound } from "@/audio/engine";
+
+function InternalLink({ target, label }: { target: string; label: string }) {
+  const { openFile } = useShell();
+  return (
+    <button
+      className="hover:underline"
+      style={{ color: "var(--accent-soft)" }}
+      onClick={() => { const n = findNode(target); if (n) { sound.fileOpen(); openFile(n.path, n.kind); } }}
+    >
+      {label} →
+    </button>
+  );
+}
 
 /* tiny static highlighters — json / toml / log / diff. No dependency. */
 
@@ -91,6 +107,7 @@ export function Markdown({ node }: { node: VNode }) {
     <div className="text-[13px] leading-[1.75] max-w-3xl">
       {lines.map((l, i) => {
         if (l.startsWith("## ")) return <div key={i} className="mt-4 mb-1 text-[11px] uppercase tracking-[0.14em]" style={{ color: "var(--muted)" }}>{l.slice(3)}</div>;
+        if (l.startsWith("@@")) return <div key={i} id={`notable-${l.slice(2).trim()}`} className="scroll-mt-4" />;
         if (l.startsWith("# ")) return <h3 key={i} className="text-[17px] font-bold mt-1 mb-2" style={{ color: "var(--fg)" }}>{l.slice(2)}</h3>;
         if (l === "") return <div key={i} className="h-2" />;
         if (l === "---" || /^─+$/.test(l)) return <div key={i} className="my-2 border-t" style={{ borderColor: "var(--border)" }} />;
@@ -103,8 +120,17 @@ export function Markdown({ node }: { node: VNode }) {
 }
 
 function renderInline(l: string) {
-  const parts = l.split(/(`[^`]+`)/g);
-  return parts.map((p, i) =>
-    p.startsWith("`") ? <code key={i} className="px-1 rounded" style={{ background: "var(--sel-bg)", color: "var(--accent-soft)" }}>{p.slice(1, -1)}</code> : <span key={i}>{p}</span>,
-  );
+  // [[/vfs/path|label]] → internal workstation link
+  const parts = l.split(/(\[\[[^\]]+\]\]|`[^`]+`)/g);
+  return parts.map((p, i) => {
+    if (p.startsWith("[[") && p.endsWith("]]")) {
+      const inner = p.slice(2, -2).split("|");
+      const target = inner[0].trim();
+      const label = (inner[1] ?? target).trim();
+      return <InternalLink key={i} target={target} label={label} />;
+    }
+    if (p.startsWith("`"))
+      return <code key={i} className="px-1 rounded" style={{ background: "var(--sel-bg)", color: "var(--accent-soft)" }}>{p.slice(1, -1)}</code>;
+    return <span key={i}>{p}</span>;
+  });
 }

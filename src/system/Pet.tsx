@@ -8,6 +8,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useShell, type PetMode } from "@/lib/store";
 import { sound } from "@/audio/engine";
+import { prySay, pryIntroChance, type PryPool } from "./pry";
 
 const W = 16, H = 12;
 
@@ -135,10 +136,11 @@ function draw(
   // wave arm
   if (mode === "wave") { put(14, 3, colors.body); put(15, 2 - (f % 2), colors.body); }
 
-  // face (rows 4-6); pupils lean toward the cursor
+  // face (rows 4-6); pupils lean toward the cursor (quantized ±1px — stays crisp)
+  const oy = look.y > 0.5 ? 1 : look.y < -0.5 ? -1 : 0;
   const eye = (x: number) => {
     x += look.x > 0.35 ? 1 : look.x < -0.35 ? -1 : 0;
-    if (face === "open") { put(x, 5, colors.dark); put(x + 1, 5, colors.dark); put(x, 6, colors.dark); put(x + 1, 6, colors.dark); }
+    if (face === "open") { put(x, 5 + oy, colors.dark); put(x + 1, 5 + oy, colors.dark); put(x, 6 + oy, colors.dark); put(x + 1, 6 + oy, colors.dark); }
     else if (face === "closed" || face === "dot") { put(x, 6, colors.dark); put(x + 1, 6, colors.dark); }
     else if (face === "happy") { put(x, 6, colors.dark); put(x, 5, colors.dark); put(x + 1, 5, colors.dark); put(x + 1, 6, colors.dark); }
     else { put(x, 5, colors.dark); put(x + 1, 6, colors.dark); put(x + 1, 5, colors.dark); put(x, 6, colors.dark); }
@@ -206,14 +208,7 @@ function say2(ctx: CanvasRenderingContext2D, zx: number, zy: number, px: number,
   ctx.fillRect(zx + 4 * px, zy, 2 * px, px);
 }
 
-const POKE_QUIPS = ["mrrp.", "hey.", "prrt.", "you again?", "mrrp mrrp.", "*stretches*",
-  "that tickles.", "busy loafing.", "shh. plotting.", "did you see that graph?",
-  "orbit is my cardio.", "*happy wiggles*", "pet the graph, not me.", "brb. napping later.",
-  "one more lap. maybe.", "is that a bug? ship it.", "i eat stale tabs.", "pspsps.",
-  "vim or emacs? trick question.", "touch grass? never met her.", "*judges your commit messages*",
-  "i saw that typo.", "rebase in peace.", "works on my machine.", "have you tried turning it off?",
-  "*loaf intensifies*", "professional napper.", "404: motivation found."];
-const RARE_QUIPS = ["working.", "nice.", "...", "zzz...", "hmm.", "oh! hi."];
+const IDLE_CHATTER: PryPool[] = ["nonsense", "nonsense", "idle", "idle", "existential", "food", "observations", "memes", "memes", "linux"];
 
 export function Pet({ anchor }: { anchor: "desktop" | "status" }) {
   const { petOn, petMode, settings } = useShell();
@@ -231,8 +226,20 @@ export function Pet({ anchor }: { anchor: "desktop" | "status" }) {
   const idleRef = useRef(Date.now());
   const dragTrail = useRef<{ x: number; y: number; t: number }[]>([]);
   const quipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const quipIdx = useRef(-1);
+  const wokeRef = useRef(false);
+  const pokeTimes = useRef<number[]>([]);
+  const dragTimes = useRef<number[]>([]);
   const mouseRef = useRef({ x: -9999, y: -9999 });
+  // gaze personality: pry sometimes watches the cursor, sometimes ignores it,
+  // occasionally glances elsewhere on his own. Refs only — never rerenders.
+  const attnRef = useRef(1);
+  const attnUntil = useRef(0);
+  const glanceRef = useRef({ x: 0, y: 0, until: 0 });
+  // cursor-reaction state (rare; most encounters stay silent)
+  const nearSince = useRef(0);
+  const nearSaidAt = useRef(0);
+  const circleTrail = useRef<{ a: number; t: number }[]>([]);
+  const circleSaidAt = useRef(0);
   const [, force] = useState(0);
 
   const setAct = (a: LocalAct) => {
@@ -257,7 +264,7 @@ export function Pet({ anchor }: { anchor: "desktop" | "status" }) {
     const wake = () => {
       idleRef.current = Date.now();
       const s = useShell.getState();
-      if (s.petMode === "sleep") { s.setPetMode("idle"); say("..."); }
+      if (s.petMode === "sleep") { s.setPetMode("idle"); say(Math.random() < 0.3 ? prySay("greetings") : "..."); }
     };
     window.addEventListener("mousemove", wake, { passive: true });
     window.addEventListener("keydown", wake);
@@ -273,10 +280,61 @@ export function Pet({ anchor }: { anchor: "desktop" | "status" }) {
     };
   }, [petOn]);
 
+  // session entry: pry starts asleep, wakes shortly after arrival.
+  // (Pet mounts once per page load, so this fires per session, not per route.)
+  useEffect(() => {
+    if (!petOn || wokeRef.current) return;
+    wokeRef.current = true;
+    const s = useShell.getState();
+    if (s.petMode === "idle") s.setPetMode("sleep");
+    const t = setTimeout(() => {
+      const st = useShell.getState();
+      if (st.petMode === "sleep" && !document.hidden) {
+        st.setPetMode("idle");
+        say(prySay("wakeUp"));
+        window.dispatchEvent(new Event("pry-awake"));
+      }
+    }, 2400);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [petOn]);
+
   // cursor tracking (watch-cursor + proximity reactions)
   useEffect(() => {
     if (!petOn) return;
-    const onMove = (e: MouseEvent) => { mouseRef.current = { x: e.clientX, y: e.clientY }; };
+    const onMove = (e: MouseEvent) => {
+      mouseRef.current = { x: e.clientX, y: e.clientY };
+      // rare cursor reactions — proximity hover + circling (see pools cursorNear/cursorCircle)
+      try {
+        const now = Date.now();
+        const px = (posRef.current.x / 100) * window.innerWidth;
+        const py = window.innerHeight - 56;
+        const d = Math.hypot(e.clientX - px, e.clientY - py);
+        if (d < 110 && useShell.getState().petMode === "idle" && actRef.current === "none") {
+          if (!nearSince.current) nearSince.current = now;
+          else if (now - nearSince.current > 4000 && now - nearSaidAt.current > 90000 && Math.random() < 0.3) {
+            nearSaidAt.current = now;
+            say(prySay("cursorNear"), 3000);
+          }
+          // circling: count angle-direction reversals around pry within 6s
+          const a = Math.atan2(e.clientY - py, e.clientX - px);
+          const tr = circleTrail.current;
+          tr.push({ a, t: now });
+          while (tr.length && now - tr[0].t > 6000) tr.shift();
+          let rev = 0;
+          for (let i = 2; i < tr.length; i++) {
+            const d1 = tr[i - 1].a - tr[i - 2].a, d2 = tr[i].a - tr[i - 1].a;
+            if (d1 * d2 < -0.2) rev++;
+          }
+          if (rev >= 6 && now - circleSaidAt.current > 120000) {
+            circleSaidAt.current = now;
+            say(prySay("cursorCircle"), 3000);
+          }
+        } else {
+          nearSince.current = 0;
+        }
+      } catch { /* noop */ }
+    };
     window.addEventListener("mousemove", onMove, { passive: true });
     return () => window.removeEventListener("mousemove", onMove);
   }, [petOn]);
@@ -319,12 +377,12 @@ export function Pet({ anchor }: { anchor: "desktop" | "status" }) {
       } else if (r < 0.68) {
         // watch: stop and track the cursor, sometimes comment
         hold(3200);
-        if (Math.random() < 0.4) say(RARE_QUIPS[Math.floor(Math.random() * RARE_QUIPS.length)]);
+        if (Math.random() < 0.3) say(prySay(pickPool()));
         setTimeout(() => {}, 3200);
-      } else if (r < 0.71 && Math.random() < 0.3) {
-        say(RARE_QUIPS[Math.floor(Math.random() * RARE_QUIPS.length)]);
+      } else if (r < 0.705) {
+        say(prySay(pickPool()));
       }
-      // else: keep idling (blink handled in draw)
+      // else: keep idling — silence is normal (blink handled in draw)
     }, 5000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -338,23 +396,27 @@ export function Pet({ anchor }: { anchor: "desktop" | "status" }) {
       if (s.petMode !== "walk" || targetRef.current == null || document.hidden) return;
       if (actRef.current === "drag") return;
       setPos((p) => {
+        // pure: no nested setters inside the updater (React replays these)
         const d = targetRef.current! - p.x;
-        if (Math.abs(d) < 1.6) {
-          // arrived: rarely turn back, almost always settle
-          if (Math.random() < 0.15) {
-            targetRef.current = p.x < 50 ? 72 + Math.random() * 18 : 4 + Math.random() * 18;
-            setFlip(targetRef.current! < p.x);
-            return { ...p, y: 0 };
-          }
-          targetRef.current = null;
-          if (useShell.getState().petMode === "walk") useShell.getState().setPetMode("idle");
-          settleRef.current = Date.now() + 20000 + Math.random() * 10000;
-          return { ...p, y: 0 };
-        }
-        setFlip(d < 0);
+        if (Math.abs(d) < 1.6) return { ...p, y: 0 };
         // waddle: alternate a small hop each step so it walks instead of sliding
         return { ...p, x: p.x + Math.sign(d) * 1.5, y: p.y === 0 ? -2 : 0 };
       });
+      // arrival side-effects live outside the updater
+      const d = targetRef.current! - posRef.current.x;
+      if (Math.abs(d) < 1.6) {
+        // arrived: rarely turn back, almost always settle
+        if (Math.random() < 0.15) {
+          targetRef.current = posRef.current.x < 50 ? 72 + Math.random() * 18 : 4 + Math.random() * 18;
+          setFlip(targetRef.current! < posRef.current.x);
+        } else {
+          targetRef.current = null;
+          if (useShell.getState().petMode === "walk") useShell.getState().setPetMode("idle");
+          settleRef.current = Date.now() + 20000 + Math.random() * 10000;
+        }
+      } else {
+        setFlip(d < 0);
+      }
     }, 70);
     return () => clearInterval(t);
   }, [anchor, petOn, settings.motion]);
@@ -374,15 +436,39 @@ export function Pet({ anchor }: { anchor: "desktop" | "status" }) {
     };
     const t = setInterval(() => {
       frameRef.current++;
-      // pupils track the cursor
+      // gaze: quantized cursor direction, gated by attention + state.
+      // pry notices the cursor sometimes, ignores it sometimes, and glances
+      // around on his own. Never during sleep/drag/dizzy/recovery, never
+      // without motion enabled. Refs only — no rerenders at mousemove rate.
       let look = { x: 0, y: 0 };
       try {
-        const r = cv.getBoundingClientRect();
-        const m = mouseRef.current;
-        look = {
-          x: Math.max(-1, Math.min(1, (m.x - (r.left + r.width / 2)) / 160)),
-          y: Math.max(-1, Math.min(1, (m.y - (r.top + r.height / 2)) / 160)),
-        };
+        const now = Date.now();
+        if (now > attnUntil.current) {
+          attnUntil.current = now + 8000 + Math.random() * 9000;
+          attnRef.current = Math.random() < 0.55 ? 1 : 0;
+        }
+        const s = useShell.getState();
+        const gazeOff = !settings.motion || s.petMode === "sleep" || s.petMode === "walk"
+          || ["drag", "dizzy", "flop", "fall"].includes(actRef.current) || actRef.current === "groom";
+        if (!gazeOff) {
+          if (attnRef.current === 1) {
+            const r = cv.getBoundingClientRect();
+            const m = mouseRef.current;
+            look = {
+              x: Math.max(-1, Math.min(1, (m.x - (r.left + r.width / 2)) / 160)),
+              y: Math.max(-1, Math.min(1, (m.y - (r.top + r.height / 2)) / 160)),
+            };
+          } else if (now < glanceRef.current.until) {
+            look = { x: glanceRef.current.x, y: glanceRef.current.y };
+          } else if (Math.random() < 0.03) {
+            glanceRef.current = {
+              x: [-1, -0.5, 0, 0.5, 1][Math.floor(Math.random() * 5)],
+              y: [-1, 0, 0, 1][Math.floor(Math.random() * 4)],
+              until: now + 2500 + Math.random() * 2500,
+            };
+            look = { x: glanceRef.current.x, y: glanceRef.current.y };
+          }
+        }
       } catch { /* noop */ }
       // watch cursor while idle: face whoever is near
       if (actRef.current === "none" && useShell.getState().petMode === "idle" && anchor === "desktop") {
@@ -400,6 +486,23 @@ export function Pet({ anchor }: { anchor: "desktop" | "status" }) {
 
   const px = Math.max(2, Math.round((anchor === "desktop" ? 4 : 2) * settings.petSize));
 
+  /** state/context-eligible chatter pool — pry never speaks out of context */
+  const pickPool = (): PryPool => {
+    const one = <T,>(xs: T[]): T => xs[Math.floor(Math.random() * xs.length)];
+    const s = useShell.getState();
+    if (s.desktopWs === 2) return one(["orbit", "orbit", "nonsense", "idle"] as PryPool[]);
+    if (s.desktopWs === 3) return one(["signal", "signal", "research", "observations"] as PryPool[]);
+    const tab = s.dockTabs.find((t) => t.id === s.activeDock);
+    if (s.dockVisible && tab?.kind === "term") return one(["terminal", "terminal", "coding", "nonsense"] as PryPool[]);
+    if (s.dockVisible && tab?.kind === "agent") return one(["agent", "agent", "nonsense"] as PryPool[]);
+    const buf = s.activeBuffer ?? "";
+    if (buf.includes("resume.pdf")) return "resume";
+    if (buf.includes("/research/") || buf.includes("lsrep")) return one(["research", "research", "projects"] as PryPool[]);
+    if (buf.includes("/projects/")) return one(["projects", "projects", "research", "coding"] as PryPool[]);
+    if (buf.includes("/about/")) return one(["observations", "idle"] as PryPool[]);
+    return one(IDLE_CHATTER);
+  };
+
   const poke = () => {
     const now = Date.now();
     idleRef.current = now;
@@ -412,8 +515,12 @@ export function Pet({ anchor }: { anchor: "desktop" | "status" }) {
     s.setPetMode("wave");
     hold(1300);
     setTimeout(() => { if (useShell.getState().petMode === "wave") useShell.getState().setPetMode("idle"); }, 1300);
-    quipIdx.current = (quipIdx.current + 1) % POKE_QUIPS.length;
-    say(POKE_QUIPS[quipIdx.current]);
+    const intro = pryIntroChance();
+    if (intro) { say(intro); return; }
+    pokeTimes.current = [...pokeTimes.current.filter((t) => now - t < 10000), now];
+    if (pokeTimes.current.length >= 4) say(prySay("annoyed"));
+    else if (Math.random() < 0.2) say(prySay(IDLE_CHATTER[Math.floor(Math.random() * IDLE_CHATTER.length)]));
+    else say(prySay("interaction"));
   };
 
   const cv = (
@@ -427,7 +534,7 @@ export function Pet({ anchor }: { anchor: "desktop" | "status" }) {
 
   if (anchor === "status") {
     return (
-      <button onClick={poke} title={`companion (${petMode}${act !== "none" ? ` · ${act}` : ""})`} aria-label="interact with companion" className="px-1.5 shrink-0 cursor-pointer">
+      <button onClick={poke} title={`pry (${petMode}${act !== "none" ? ` · ${act}` : ""})`} aria-label="interact with pry" className="px-1.5 shrink-0 cursor-pointer">
         {cv}
       </button>
     );
@@ -440,6 +547,11 @@ export function Pet({ anchor }: { anchor: "desktop" | "status" }) {
     dragTrail.current = [{ x: e.clientX, y: e.clientY, t: Date.now() }];
     downAt.current = { x: e.clientX, y: e.clientY, t: Date.now() };
     targetRef.current = null;
+    const now = Date.now();
+    dragTimes.current = [...dragTimes.current.filter((t) => now - t < 30000), now];
+    if (dragTimes.current.length >= 2 && useShell.getState().petMode !== "sleep") {
+      say(dragTimes.current.length >= 4 ? prySay("annoyed") : prySay("dragged"), 2600);
+    }
     if (useShell.getState().petMode === "walk") useShell.getState().setPetMode("idle");
     if (useShell.getState().petMode === "sleep") useShell.getState().setPetMode("idle");
     setAct("drag");
@@ -476,7 +588,7 @@ export function Pet({ anchor }: { anchor: "desktop" | "status" }) {
     if (dist > 750 && recent.length > 4) {
       setAct("dizzy");
       hold(5200);
-      say("bonk.", 3000);
+      say(prySay("dizzy"), 3000);
       setPos((p) => ({ ...p, y: 0 }));
       setTimeout(() => {
         setAct("flop");
@@ -498,6 +610,7 @@ export function Pet({ anchor }: { anchor: "desktop" | "status" }) {
         if (k >= 1) {
           clearInterval(t);
           sound.nav();
+          say(prySay("dropped"), 2600);
           if (actRef.current === "fall") setAct("none");
         }
       }, 40);
@@ -518,8 +631,8 @@ export function Pet({ anchor }: { anchor: "desktop" | "status" }) {
       <div
         role="button"
         tabIndex={0}
-        aria-label="companion creature — drag to pick up, shake for chaos"
-        title={`companion (${petMode}${act !== "none" ? ` · ${act}` : ""})`}
+        aria-label="pry — drag to pick up, shake for chaos"
+        title={`pry (${petMode}${act !== "none" ? ` · ${act}` : ""})`}
         onKeyDown={(e) => e.key === "Enter" && poke()}
         onPointerDown={onDown}
         onPointerMove={onMove}

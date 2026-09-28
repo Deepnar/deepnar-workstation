@@ -1,0 +1,105 @@
+/* ── Catppuccin Latte Lavender cursor system (v2.0.0, local assets) ──
+   ONE centralized cursor stylesheet. Every rule carries the native CSS
+   keyword as fallback. No JS fake cursor anywhere on the site.
+   Art: catppuccin/cursors (GPL-2.0, see public/cursors/LICENSE.catppuccin).
+   Hotspots preserved from the theme's metadata.json (scaled 24 → 32px). */
+
+/* base */
+html, body {
+  cursor: url("/cursors/default.png") 3 3, default;
+}
+
+/* links + controls → pointer */
+a, button, summary, select, label,
+[role="button"], [role="tab"], [role="menuitem"], [role="option"], [role="listitem"],
+.cursor-pointer {
+  cursor: url("/cursors/pointer.png") 18 10, pointer;
+}
+
+/* text → I-beam */
+input, textarea, [contenteditable="true"],
+pre, code, .xterm, .xterm *,
+.cursor-text {
+  cursor: url("/cursors/text.png") 20 20, text;
+}
+.cursor-vertical-text {
+  cursor: url("/cursors/vertical-text.png") 20 21, vertical-text;
+}
+
+/* grab surfaces (signal graph, pet) */
+.cursor-grab {
+  cursor: url("/cursors/grab.png") 20 21, grab;
+}
+.cursor-grab:active, .active\:cursor-grabbing:active {
+  cursor: url("/cursors/grabbing.png") 19 17, grabbing;
+}
+.cursor-move {
+  cursor: url("/cursors/move.png") 20 20, move;
+}
+.cursor-all-scroll {
+  cursor: url("/cursors/all-scroll.png") 20 20, all-scroll;
+}
+
+/* game + precision */
+.cursor-crosshair, canvas[data-game="orbit"] {
+  cursor: url("/cursors/crosshair.png") 20 20, crosshair;
+}
+.cursor-cell {
+  cursor: url("/cursors/cell.png") 20 20, cell;
+}
+
+/* states */
+[aria-busy="true"], .cursor-progress {
+  cursor: url("/cursors/progress.png") 3 3, progress;
+}
+.cursor-wait, .cursor-wait * {
+  cursor: url("/cursors/wait.png") 21 21, wait;
+}
+[disabled], [aria-disabled="true"], .cursor-not-allowed {
+  cursor: url("/cursors/not-allowed.png") 21 21, not-allowed;
+}
+.cursor-help, [data-cursor="help"] {
+  cursor: url("/cursors/help.png") 3 3, help;
+}
+.cursor-context-menu {
+  cursor: url("/cursors/context-menu.png") 3 3, default;
+}
+
+/* resizes */
+.cursor-ns-resize {
+  cursor: url("/cursors/ns-resize.png") 20 20, ns-resize;
+}
+.cursor-ew-resize {
+  cursor: url("/cursors/ew-resize.png") 20 20, ew-resize;
+}
+.cursor-nwse-resize {
+  cursor: url("/cursors/nwse-resize.png") 20 20, nwse-resize;
+}
+.cursor-nesw-resize {
+  cursor: url("/cursors/nesw-resize.png") 20 20, nesw-resize;
+}
+.cursor-col-resize, [role="separator"] {
+  cursor: url("/cursors/col-resize.png") 20 20, col-resize;
+}
+.cursor-row-resize {
+  cursor: url("/cursors/row-resize.png") 20 21, row-resize;
+}
+
+/* drag/drop + zoom */
+.cursor-copy {
+  cursor: url("/cursors/copy.png") 3 3, copy;
+}
+.cursor-alias {
+  cursor: url("/cursors/alias.png") 3 3, alias;
+}
+.cursor-zoom-in {
+  cursor: url("/cursors/zoom-in.png") 17 17, zoom-in;
+}
+.cursor-zoom-out {
+  cursor: url("/cursors/zoom-out.png") 17 17, zoom-out;
+}
+
+/* document viewer surfaces zoom affordances */
+.doc-surface {
+  cursor: url("/cursors/zoom-in.png") 17 17, zoom-in;
+}

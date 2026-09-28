@@ -10,6 +10,7 @@ import { Group, Panel, Separator, usePanelRef, type PanelImperativeHandle } from
 import { useShell } from "@/lib/store";
 import { HOME, ROOT, findNode, listDir, shortPath, type VNode } from "@/vfs/vfs";
 import { FileView, HomeView, OssView, PreviewPane, Row, iconFor } from "./panes";
+import { PathBadge } from "./DomainBadge";
 import { XTerminal } from "./XTerminal";
 import { Agent } from "./Agent";
 import { WebTab } from "./WebTab";
@@ -150,6 +151,7 @@ function TreeRow({ node, depth }: { node: VNode; depth: number }) {
           {isOpen ? "▼" : "▶"}
         </button>
         <span className="truncate">{node.name}/</span>
+        <span className="ml-1.5"><PathBadge path={node.path} /></span>
       </div>
       {isOpen && (
         <div className="tree-kids">
@@ -254,6 +256,7 @@ function Browser() {
                   <span className="flex gap-2 items-baseline">
                     <span style={{ color: "var(--icy)" }}>{iconFor(n)}</span>
                     <span className="truncate">{n.name}{n.kind === "dir" ? "/" : ""}</span>
+                    <PathBadge path={n.path} />
                   </span>
                 </Row>
               </div>

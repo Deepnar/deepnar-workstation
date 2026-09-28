@@ -2,7 +2,8 @@
 // assistant context and navigation ALL read these nodes.
 // Bodies are curated public content assembled from src/content/* (verified).
 import { profile } from "@/content/profile";
-import { projects, type Project } from "@/content/projects";
+import { aboutReadme, notableBody } from "@/content/about";
+import { dirOf, projects, type Project } from "@/content/projects";
 import { paper, researchEval } from "@/content/research";
 import { prs } from "@/content/oss";
 
@@ -31,45 +32,60 @@ const dir = (path: string, name: string, children: VNode[], extra?: Partial<VNod
   path, name, kind: "dir", children, ...extra,
 });
 
-const actions = (p: Pick<Project, "links" | "upstream" | "repo">): Record<string, string> => ({
-  github: p.links.github,
-  ...(p.links.arxiv ? { arxiv: p.links.arxiv } : {}),
-  ...(p.links.doi ? { doi: p.links.doi } : {}),
-  ...(p.upstream ? { upstream: `https://github.com/${p.upstream}` } : {}),
-});
+/* links are actions/metadata — never fake files, never dead buttons */
+const actions = (p: Pick<Project, "links" | "upstream" | "repo">): Record<string, string> => {
+  const out: Record<string, string> = { repo: p.repo };
+  if (p.links.github) out.github = p.links.github;
+  else out.private = "private source";
+  if (p.links.demo) out.demo = p.links.demo;
+  if (p.links.arxiv) out.arxiv = p.links.arxiv;
+  if (p.links.doi) out.doi = p.links.doi;
+  if (p.upstream) out.upstream = `https://github.com/${p.upstream}`;
+  return out;
+};
 
-function projectReadme(p: Project, base: string): VNode {
-  const pre = `${base}/${p.slug}`;
-  const roleLine = p.kind === "team" ? `team project · ${p.status}` : p.status;
+function projectReadme(p: Project): VNode {
+  const base = dirOf(p);
+  const roleLine =
+    p.kind === "team" ? `team project · ${p.status}` : p.status;
   const body = [
     `# ${p.name}`, ``, roleLine, ``, p.blurb, ``,
-    ...(p.lane ? [`## my role`, ...p.lane.map((r) => `· ${r}`), ``] : []),
+    ...(p.lane ? [`## my contribution`, ...p.lane.map((r) => `· ${r}`), ``] : []),
     ...(p.evidence.length ? [`## evidence`, ...p.evidence.map((e) => `· ${e}`), ``] : []),
     ...(p.motivation ? [`## why`, p.motivation, ``] : []),
+    ...(p.visibility === "private" ? [`private source — described here, no public repo button.`, ``] : []),
     `## stack`, p.stack.join(" · "),
   ];
-  return md(`${pre}/README.md`, "README.md", p.name, body, {
+  return md(`${base}/README.md`, "README.md", p.name, body, {
     searchTerms: `${p.slug} ${p.name} ${p.repo} ${p.stack.join(" ")}`,
-    meta: { repo: p.repo, ...actions(p) },
+    meta: actions(p),
   });
 }
 
-function soloDir(p: Project, base: string, details: VNode[]): VNode {
-  const pre = `${base}/${p.slug}`;
-  return dir(pre, p.slug, [projectReadme(p, base), ...(details.length ? [dir(`${pre}/details`, "details", details)] : [])]);
+function projectDir(p: Project, details: VNode[] = []): VNode {
+  const base = dirOf(p);
+  // practice entries are one README only — breadth, not fake products
+  return dir(base, p.slug, [projectReadme(p), ...(details.length ? [dir(`${base}/details`, "details", details)] : [])]);
 }
 
 const iceDetails: VNode[] = [
   md(`${HOME}/projects/ice/details/architecture.md`, "architecture.md", "ice architecture", [
     `# architecture`, ``,
-    `client ──▶ ICE proxy ──▶ local model (Ollama / SGLang)`, `           │`, `           └── PostgreSQL + pgvector`,
-    `               episodic · knowledge graph · procedural · documents`, ``,
-    `each turn: synchronous pre-flight, asynchronous post-flight.`, ``,
-    `pre-flight: Qwen3-Embedding-0.6B (frozen) → 27 all-sigmoid logits`, `  (11 topic · 12 intent · 4 context-reliance) → calibrated routing`, `  decides whether long-term retrieval fires at all.`, ``,
-    `retrieval: lexical · vector · graph · procedural · document · timeline`, `  → rank fusion → dedup → bounded token budgets.`,
-  ]),
+    `client ──▶ ICE proxy / service layer ──▶ OpenAI-compatible local model`, ``,
+    `pre-flight: prompt classifier → context-reliance decision → retrieval gate`, ``,
+    `hybrid retrieval: lexical · vector · temporal · knowledge graph · procedural · documents`, ``,
+    `  → fusion → dedup → diversification → token budget`, ``,
+    `prompt assembly → model`, ``,
+    `post-flight: density decision → summarisation → pattern mining → graph extraction`, ``,
+    `  → maintenance: decay · clustering · reflection · compaction`, ``,
+    `PostgreSQL + pgvector: episodic · temporally versioned graph · procedural · documents · slots · ledger`, ``,
+    `The boundary that matters: retrieval ELIGIBILITY first (should memory fire at all?),`,
+    `retrieval RANKING only when that decision is positive.`, ``,
+    `The graph is temporal, not overwrite-only: superseded facts keep valid_from / valid_until history.`, ``,
+    `One service layer serves both the HTTP proxy and the MCP surface.`,
+  ], { searchTerms: "ice architecture proxy pre-flight post-flight retrieval graph" }),
   md(`${HOME}/projects/ice/details/evaluation.log`, "evaluation.log", "ice v2 evaluation", [
-    `run  controlled-eval      frozen v2 snapshot`, `     turns           1,985`, `     probes            219`,
+    `run  controlled-eval      frozen v2 snapshot (v2-paper-eval tag, NOT main)`, `     turns           1,985`, `     probes            219`,
     `     observations    1,211`, `     checkpoints        52`, ``,
     `run  density-stress       memory-pressure behavior`, `run  fidelity-audit     which mechanisms reached the output`, ``,
     `note candid failure cases included — settings where ICE trails pure vector-RAG.`,
@@ -78,54 +94,83 @@ const iceDetails: VNode[] = [
 ];
 
 const pfDetails: VNode[] = [
-  md(`${HOME}/projects/presentation-forge/details/architecture.md`, "architecture.md", "forge pipeline", [
-    `# pipeline`, ``, `sources ──▶ research ──▶ human approval ──▶ schema validation`,
-    `  ──▶ deterministic render ──▶ critique ──▶ PPTX / DOCX / report`, ``,
+  md(`${HOME}/projects/presentation-forge/details/architecture.md`, "architecture.md", "forge architecture", [
+    `# architecture`, ``,
+    `web app / CLI ──▶ briefing + project state`, `  ├─ research adapters: SearXNG · arXiv · Crossref · uploads`, `  ▼`,
+    `outline / plan ──▶ HUMAN GATE ──▶ schema-constrained content`, `  ├─ semantic slide vocabulary · theme YAML · locked chrome`, `  ▼`,
+    `deterministic renderer ──▶ PPTX · DOCX · report/script`, `  ▼`,
+    `raster preview ──▶ geometry checks · draw checks · text-survival · vision critique`, ``,
+    `The model decides WHAT a slide is; the renderer decides HOW that type is laid out.`, ``,
     `74 slide types · 34 themes · Docker-first · BYOK or Ollama.`,
-  ]),
+  ], { searchTerms: "forge architecture pipeline renderer themes slide types" }),
 ];
 
 const ttDetails: VNode[] = [
-  md(`${HOME}/projects/timetable-generator/details/constraints.md`, "constraints.md", "constraint model", [
-    `# constraints`, ``, `hard: rooms · faculty · groups · shared resources (solver must satisfy)`,
-    `soft (weighted): preferences scored, ranked candidates`, ``,
-    `solvers: greedy + OR-Tools CP-SAT · audit + publish workflow.`,
-  ]),
+  md(`${HOME}/projects/timetable-generator/details/constraint-engine.md`, "constraint-engine.md", "constraint engine", [
+    `# constraint engine`, ``,
+    `profile: resources · assignments · parameters · hard constraints · soft constraints`, `  ▼`,
+    `Scheduler.run(): load published conflicts → generate N diversified candidates`, `  ├─ GreedySolver (most-constrained-first) · OR-Tools CP-SAT`, `  └─ ConstraintChecker + Scorer`, `  ▼`,
+    `TimetableGeneration → TimetableInstance[] → TimetableSlot[]`, ``,
+    `Cross-timetable safety is per-resource (faculty / room / group independent sets):`, `a combined tuple would only block identical five-way matches and miss real conflicts.`, ``,
+    `Lifecycle: DRAFT → SELECTED → PUBLISHED → ARCHIVED.`,
+  ], { searchTerms: "timetable constraint solver greedy ortools cp-sat" }),
 ];
 
 const prcDetails: VNode[] = [
   md(`${HOME}/projects/prompt-routing-classifier/details/evaluation.log`, "evaluation.log", "classifier eval", [
-    `corpus  5,100 prompts · documented dataset + training path`, `model   sentence embeddings + one-vs-rest logistic regression`, ``,
-    `     topic F1    0.68`, `     intent F1   0.56`, ``,
-    `note CPU-only inference. routing design reused as ICE pre-flight basis.`,
+    `corpus  ~5,100 labelled prompts · documented dataset + training path`, `model   MiniLM sentence embedding (384-d) + one-vs-rest logistic regression`, ``,
+    `     topic F1    ~0.68`, `     intent F1   ~0.56`, ``,
+    `note CPU-only inference. The cheap pre-flight idea later became central to ICE.`,
+    `note Prompts derive from private history and are not published.`,
   ], { searchTerms: "prompt routing classifier eval f1" }),
 ];
 
-function teamNode(p: Project, base: string): VNode {
-  const pre = `${base}/${p.slug}`;
-  return dir(pre, p.slug, [projectReadme(p, base)]);
-}
+const wsDetails: VNode[] = [
+  md(`${HOME}/projects/deepnar-workstation/details/architecture.md`, "architecture.md", "workstation architecture", [
+    `# architecture`, ``,
+    `system layer: boot · greeter · Waybar · desktop workspaces · app window · pet · audio · settings`, ``,
+    `workstation layer: Explorer · Yazi-style browser · preview · buffers · right utility dock · terminal · finder · Agent`, ``,
+    `VFS: one source of truth — paths, dirs, files, project content, research artifacts, OSS entries.`, ``,
+    `terminal: xterm renderer + safe client-side interpreter; independent session cwd/history/scrollback.`, ``,
+    `agent: deterministic intent/entity engine over the VFS/content index; no remote model.`, ``,
+    `github sync: authenticated gh at local sync time only; visitors never need a token.`, ``,
+    `deploy: static-friendly Next.js, no persistent backend.`,
+  ], { searchTerms: "workstation architecture vfs terminal agent system" }),
+];
 
-function practiceNode(p: Project, base: string): VNode {
-  const pre = `${base}/${p.slug}`;
-  return dir(pre, p.slug, [md(`${pre}/README.md`, "README.md", p.name, [
-    `# ${p.name}`, ``, `${p.repo} · ${p.status}`, ``, p.blurb, ``, `## stack`, p.stack.join(" · "),
-  ], { searchTerms: `${p.slug} ${p.name} ${p.stack.join(" ")}`, meta: { repo: p.repo, github: p.links.github } })]);
-}
+const iisDetails: VNode[] = [
+  md(`${HOME}/projects/collaborations/iis-mini/details/person1-results.md`, "person1-results.md", "person-1 results", [
+    `# Person-1 results`, ``,
+    `Dataset: IBM synthetic credit-card transactions. Primary metric: PR-AUC.`, `Test set locked until model/threshold selection was complete.`, ``,
+    `| Model | Strategy | Precision | Recall | F1 | PR-AUC |`,
+    `| LogReg | original | 0.875 | 0.143 | 0.246 | 0.169 |`,
+    `| LogReg | balanced | 0.007 | 0.837 | 0.014 | 0.206 |`,
+    `| RF d10/200 | original | 0.955 | 0.429 | 0.592 | 0.618 |`,
+    `| RF, threshold ~0.24 | tuned | 0.784 | 0.592 | 0.674 | 0.618 |`, ``,
+    `Threshold tuning changes the operating point, not ranking quality — PR-AUC is unchanged.`,
+  ], { searchTerms: "iis person-1 results random forest threshold pr-auc" }),
+];
 
-/* ── tree ── */
-const solo = (s: string) => projects.find((p) => p.slug === s)!;
-const ice = solo("ice"), pf = solo("presentation-forge"), tt = solo("timetable-generator"), prc = solo("prompt-routing-classifier");
+/* ── tree (curated: flagships first, practice on shelves, history in graph) ── */
+const bySlug = (s: string) => projects.find((p) => p.slug === s)!;
+const ice = bySlug("ice"), pf = bySlug("presentation-forge"), tt = bySlug("timetable-generator"),
+  prc = bySlug("prompt-routing-classifier"), ws = bySlug("deepnar-workstation"), ori = bySlug("orien-config");
 const collabs = projects.filter((p) => p.bucket === "collaborations");
-const practice = projects.filter((p) => p.bucket === "practice");
+const practiceBy = (t: "ml" | "software" | "early") => projects.filter((p) => p.bucket === "practice" && p.track === t);
 
 const projectsDir: VNode = dir(`${HOME}/projects`, "projects", [
-  soloDir(ice, `${HOME}/projects`, iceDetails),
-  soloDir(pf, `${HOME}/projects`, pfDetails),
-  soloDir(tt, `${HOME}/projects`, ttDetails),
-  soloDir(prc, `${HOME}/projects`, prcDetails),
-  dir(`${HOME}/projects/collaborations`, "collaborations", collabs.map((p) => teamNode(p, `${HOME}/projects/collaborations`))),
-  dir(`${HOME}/projects/practice`, "practice", practice.map((p) => practiceNode(p, `${HOME}/projects/practice`))),
+  projectDir(ice, iceDetails),
+  projectDir(pf, pfDetails),
+  projectDir(tt, ttDetails),
+  projectDir(prc, prcDetails),
+  projectDir(ws, wsDetails),
+  dir(`${HOME}/projects/systems`, "systems", [projectDir(ori)]),
+  dir(`${HOME}/projects/collaborations`, "collaborations", collabs.map((p) => projectDir(p, p.slug === "iis-mini" ? iisDetails : []))),
+  dir(`${HOME}/projects/practice`, "practice", [
+    dir(`${HOME}/projects/practice/ml`, "ml", practiceBy("ml").map((p) => projectDir(p))),
+    dir(`${HOME}/projects/practice/software`, "software", practiceBy("software").map((p) => projectDir(p))),
+    dir(`${HOME}/projects/practice/early`, "early", practiceBy("early").map((p) => projectDir(p))),
+  ]),
 ]);
 
 const researchDir: VNode = dir(`${HOME}/research`, "research", [
@@ -161,9 +206,13 @@ const ossDir: VNode = dir(`${HOME}/oss`, "oss", [
 ]);
 
 const aboutDir: VNode = dir(`${HOME}/about`, "about", [
-  md(`${HOME}/about/README.md`, "README.md", "about deepesh", [
-    `# Deepesh Sonar (deepnar)`, ``, profile.tagline, ``, ...profile.aboutLong, ``,
-    `${profile.education.degree}, ${profile.education.school} — expected ${profile.education.expected} · CGPA ${profile.education.cgpa}`,
+  md(`${HOME}/about/README.md`, "README.md", "about deepesh", aboutReadme,
+    { searchTerms: "about deepesh sonar who background education" }),
+  md(`${HOME}/about/notable.md`, "notable.md", "notable — competitions, orgs, credentials", notableBody,
+    { searchTerms: "notable achievements competitions SIH DIPEX hackathon certificates experience internship membership" }),
+  { path: `${HOME}/about/resume.pdf`, name: "resume.pdf", kind: "pdf", title: "resume (PDF)", link: "/resume/Deepesh_Sonar_Resume.pdf", body: ["resume.pdf — sanitized public CV.", "open to view · download to save."] },
+  dir(`${HOME}/about/evidence`, "evidence", [
+    { path: `${HOME}/about/evidence/dipex-2026-state-final.pdf`, name: "dipex-2026-state-final.pdf", kind: "pdf", title: "DIPEX 2026 state-final certificate", link: "/evidence/dipex-2026-state-final.pdf", body: ["DIPEX 2026 state-final participation certificate — civeserve working model.", "open to view · download to save."] },
   ]),
 ]);
 
@@ -194,12 +243,11 @@ export function resolvePath(cwd: string, arg?: string): string {
   }
   let p = arg.startsWith("~/") ? HOME + arg.slice(1) : arg.startsWith("/") ? arg : cwd === HOME ? `${HOME}/${arg}` : `${cwd}/${arg}`;
   p = p.replace(/\/$/, "");
-  // tolerate short names: ice → projects/ice
   if (!findNode(p)) {
-    for (const c of ["/projects", "/projects/collaborations", "/projects/practice", "/oss/merged", "/oss/open"]) {
-      const cand = `${HOME}${c}/${arg}`;
-      if (findNode(cand)) return cand;
-    }
+    // tolerate short names anywhere in the tree: ice → projects/ice
+    const leaf = p.split("/").pop()!.toLowerCase();
+    const hit = flatten().find((n) => n.name.toLowerCase() === leaf || n.path.split("/").pop()!.toLowerCase() === leaf);
+    if (hit) return hit.path;
   }
   return p;
 }

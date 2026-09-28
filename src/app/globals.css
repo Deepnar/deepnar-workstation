@@ -270,15 +270,4 @@ html[data-motion="off"] *::after {
   transition: none !important;
 }
 
-/* ── custom JS cursor active: hide the native one (except text contexts) ── */
-html.custom-cursor .cursor-theme, html.custom-cursor .cursor-theme * {
-  cursor: none;
-}
-html.custom-cursor .cursor-theme input, html.custom-cursor .cursor-theme textarea,
-html.custom-cursor .cursor-theme [contenteditable="true"],
-html.custom-cursor .cursor-theme .xterm, html.custom-cursor .cursor-theme .xterm * {
-  cursor: text;
-}
-html.custom-cursor .cursor-theme iframe {
-  cursor: auto;
-}
+/* ── retired JS-cursor overrides (native Catppuccin CSS cursors now) ── */

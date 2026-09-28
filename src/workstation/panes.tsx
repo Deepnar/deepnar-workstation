@@ -4,9 +4,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useShell } from "@/lib/store";
 import { HOME, findNode, listDir, shortPath, type VNode } from "@/vfs/vfs";
 import { prs } from "@/content/oss";
+import { achievements } from "@/content/achievements";
 import { profile } from "@/content/profile";
 import gh from "@/generated/github.json";
 import { Code, Markdown } from "./highlight";
+import { RepoMetaRail, RepoMetaStrip } from "./RepoMeta";
+import { DomainBadge, PathBadge, RecognitionBadges } from "./DomainBadge";
+import { DocViewer } from "./DocViewer";
+import { projects } from "@/content/projects";
 import { sound } from "@/audio/engine";
 
 /* ── shared rows ── */
@@ -45,6 +50,7 @@ export function ActionBar({ node }: { node: VNode }) {
   const meta = node.meta ?? {};
   const acts: { label: string; href: string }[] = [];
   if (meta.github) acts.push({ label: "GitHub ↗", href: meta.github });
+  if (meta.demo) acts.push({ label: "live demo ↗", href: meta.demo });
   if (meta.arxiv) acts.push({ label: "arXiv ↗", href: meta.arxiv });
   if (meta.doi) acts.push({ label: "DOI ↗", href: meta.doi });
   if (meta.upstream) acts.push({ label: "upstream ↗", href: meta.upstream });
@@ -72,7 +78,10 @@ export function PreviewPane({ path }: { path: string }) {
     const kids = listDir(path);
     return (
       <div className="p-4 space-y-3">
-        <div className="text-[11px] uppercase tracking-[0.14em]" style={{ color: "var(--muted)" }}>{kids.length} items</div>
+        <div className="flex items-center gap-2">
+          <div className="text-[11px] uppercase tracking-[0.14em]" style={{ color: "var(--muted)" }}>{kids.length} items</div>
+          <PathBadge path={path} />
+        </div>
         {kids.slice(0, 12).map((k) => (
           <div key={k.path} className="text-[12px] truncate" style={{ color: "var(--fg-dim)" }}>
             <span style={{ color: "var(--icy)" }}>{iconFor(k)} </span>{k.name}{k.kind === "dir" ? "/" : ""}
@@ -100,8 +109,30 @@ export function PreviewPane({ path }: { path: string }) {
 export function FileView({ node }: { node: VNode }) {
   const { notify, toggle } = useShell();
   const [pdfOpen, setPdfOpen] = useState(false);
-  if (node.kind === "markdown")
-    return <div className="p-5 max-w-3xl space-y-4"><ActionBar node={node} /><Markdown node={node} /></div>;
+  if (node.kind === "markdown") {
+    const repo = node.meta?.repo;
+    const priv = node.meta?.private != null;
+    if (!repo && !priv)
+      return <div className="p-5 max-w-3xl space-y-4"><ActionBar node={node} /><Markdown node={node} /></div>;
+    const proj = projects.find((p) => p.repo === repo);
+    return (
+      <div className="p-5 flex gap-6 items-start">
+        <div className="flex-1 min-w-0 max-w-3xl space-y-4">
+          <div className="lg:hidden"><RepoMetaStrip repo={repo} isPrivate={priv} /></div>
+          {(proj?.domain || proj?.recognition?.length) && (
+            <div className="flex flex-wrap items-center gap-2">
+              {proj.domain && <DomainBadge domain={proj.domain} modifier={proj.modifier} />}
+              {proj.recognition && <RecognitionBadges items={proj.recognition} />}
+            </div>
+          )}
+          <ActionBar node={node} /><Markdown node={node} />
+        </div>
+        <div className="hidden lg:block w-[210px] shrink-0 sticky top-2">
+          <RepoMetaRail repo={repo} isPrivate={priv} />
+        </div>
+      </div>
+    );
+  }
   if (node.kind === "contact") {
     return (
       <div className="p-5 space-y-3 max-w-xl">
@@ -115,22 +146,12 @@ export function FileView({ node }: { node: VNode }) {
   }
   if (node.kind === "log") return <div className="p-5 max-w-3xl"><Code lang="log" lines={node.body ?? []} /></div>;
   if (node.kind === "pdf") {
+    const dl = node.path.includes("resume") ? "Deepesh_Sonar_Resume.pdf" : undefined;
     return (
-      <div className="p-5 space-y-3 text-[13px] max-w-xl" style={{ color: "var(--fg-dim)" }}>
-        <div className="text-[11px] uppercase tracking-[0.14em]" style={{ color: "var(--muted)" }}>resume.pdf — sanitized public CV</div>
-        <div>one page · email + links only · no private details.</div>
-        <div className="flex gap-2 text-[12px]">
-          <button className="px-3 py-1.5 border" style={{ borderColor: "var(--border)", color: "var(--accent-soft)" }}
-            onClick={() => { setPdfOpen((v) => !v); sound.fileOpen(); }}>
-            {pdfOpen ? "close" : "open"}
-          </button>
-          <a href={node.link} download="Deepesh_Sonar_Resume.pdf" className="px-3 py-1.5 border"
-            style={{ borderColor: "var(--border)", color: "var(--accent-soft)" }}
-            onClick={() => { sound.download(); notify("resume downloaded"); }}>
-            download ↓
-          </a>
-        </div>
-        {pdfOpen && <iframe title="resume preview" src={node.link} className="w-full h-[60vh] border" style={{ borderColor: "var(--border)", background: "#fff" }} />}
+      <div className="p-5 space-y-3 text-[13px] max-w-3xl" style={{ color: "var(--fg-dim)" }}>
+        <div className="text-[11px] uppercase tracking-[0.14em]" style={{ color: "var(--muted)" }}>{node.title}</div>
+        <DocViewer src={node.link ?? ""} title={node.title ?? node.name} kind="pdf" pages={1}
+          caption={node.body} downloadName={dl} />
       </div>
     );
   }
@@ -198,7 +219,7 @@ const ACTIONS: { key: string; label: string; run: () => void }[] = [
 function BlockLogo() {
   return (
     <img src="/deepnar-wordmark.png" alt="DEEPNAR" width={520} height={191}
-      className="max-w-full h-auto select-none" draggable={false}
+      className="w-full max-w-[440px] h-auto select-none" draggable={false}
       style={{ borderRadius: 10, border: "1px solid var(--border)" }} />
   );
 }
@@ -209,8 +230,9 @@ export function HomeView() {
   return (
     <div className="h-full flex flex-col items-center justify-center px-6 py-5 overflow-auto">
       <BlockLogo />
-      <div className="text-[12.5px] mt-3 mb-5" style={{ color: "var(--muted)" }}>{profile.tagline}</div>
-      <div className="w-full max-w-2xl grid gap-6 md:grid-cols-2">
+      <div className="text-[12.5px] mt-2 mb-1" style={{ color: "var(--muted)" }}>{profile.tagline}</div>
+      <div className="text-[11px] mb-3" style={{ color: "var(--faint)" }}>Deepesh Sonar · AI Systems · Research · Software Engineering</div>
+      <div className="w-full max-w-2xl grid gap-4 md:grid-cols-2">
         <div role="list" aria-label="quick actions">
           {ACTIONS.map((a) => (
             <button key={a.key} role="listitem" onClick={() => { sound.select(); a.run(); }}
@@ -230,17 +252,42 @@ export function HomeView() {
           ))}
         </div>
       </div>
-      <div className="w-full max-w-2xl mt-5 flex flex-col items-center">
+      <div className="w-full max-w-2xl mt-3 flex flex-col items-center">
         <div className="text-[10.5px] uppercase tracking-[0.16em] mb-2" style={{ color: "var(--muted)" }}>
           <a href="https://github.com/Deepnar" target="_blank" rel="noreferrer" className="hover:underline">activity ↗</a>
         </div>
         <MiniCalendar />
       </div>
+      <div className="w-full max-w-2xl mt-2 flex flex-col items-center">
+        <AchievementsStrip />
+      </div>
     </div>
   );
 }
 
-/* ── oss 3-pane ── */
+/* ── home achievements (real badge art, local) ── */
+export function AchievementsStrip() {
+  return (
+    <div>
+      <div className="text-[10.5px] uppercase tracking-[0.16em] mb-2 text-center" style={{ color: "var(--muted)" }}>
+        <a href="https://github.com/Deepnar?tab=achievements" target="_blank" rel="noreferrer" className="hover:underline">achievements ↗</a>
+      </div>
+      <div className="flex gap-4 overflow-x-auto justify-center px-2" role="list" aria-label="github achievements">
+        {achievements.map((a) => (
+          <div key={a.slug} role="listitem" title={`${a.name}${a.tier ? ` ${a.tier}` : ""} — ${a.meaning}`}
+            className="flex flex-col items-center gap-1 shrink-0 w-[84px]">
+            <img src={a.img} alt={`${a.name} achievement badge`} width={44} height={44}
+              className="rounded-full select-none" draggable={false}
+              style={{ border: "1px solid var(--border)" }} />
+            <div className="text-[10.5px] text-center leading-tight" style={{ color: "var(--fg-dim)" }}>
+              {a.name}{a.tier ? ` ${a.tier}` : ""}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 export function OssView() {
   const repos = useMemo(() => [...new Set(prs.map((p) => p.repo))], []);
   const focusNonce = useShell((s) => s.listFocusNonce);

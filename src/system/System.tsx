@@ -11,7 +11,6 @@ import { Orbit } from "@/apps/Orbit";
 import { Constellation } from "@/apps/Constellation";
 import { Pet } from "./Pet";
 import { Contact, Help, Settings, Toasts } from "./Overlays";
-import { CustomCursor } from "./Cursor";
 import { sound, ambience } from "@/audio/engine";
 
 import { Starfield } from "./Starfield";
@@ -287,7 +286,6 @@ export function SystemRoot() {
     <>
       <Boot />
       <Greeter />
-      <CustomCursor />
       {(phase === "desktop" || phase === "app") && <Pet anchor="desktop" />}
       {(phase === "desktop" || phase === "app") && (
         <>
@@ -317,25 +315,35 @@ export function SystemRoot() {
   );
 }
 
-/* first-login hint: points at the ? icon, teaches the keys, dismisses forever */
+/* entry hint: points at the ? icon, teaches the keys, once per session */
 function LoginHint() {
   const { phase, toggle } = useShell();
-  const [seen, setSeen] = useState(() => {
-    try {
-      return localStorage.getItem("deepnar-hint-seen") === "1";
-    } catch {
-      return true;
-    }
-  });
-  if (phase !== "app" || seen) return null;
-  const dismiss = () => {
-    try {
-      localStorage.setItem("deepnar-hint-seen", "1");
-    } catch {
-      /* private mode */
-    }
-    setSeen(true);
-  };
+  // every fresh page session gets the hint once — never persisted across
+  // sessions. Sequenced AFTER pry wakes (pry-awake event) so the two
+  // entry beats never fight on the same frame.
+  const [ready, setReady] = useState(false);
+  const [gone, setGone] = useState(false);
+  useEffect(() => {
+    if (phase !== "app") return;
+    const show = () => {
+      const t = setTimeout(() => setReady(true), 1500);
+      return () => clearTimeout(t);
+    };
+    let cancelShow: (() => void) | undefined;
+    const onAwake = () => { cancelShow = show(); };
+    window.addEventListener("pry-awake", onAwake, { once: true });
+    // fallback: if pry is off or already awake, still show after a beat
+    const fb = setTimeout(() => setReady(true), 6000);
+    const auto = setTimeout(() => setGone(true), 22000);
+    return () => {
+      window.removeEventListener("pry-awake", onAwake);
+      cancelShow?.();
+      clearTimeout(fb);
+      clearTimeout(auto);
+    };
+  }, [phase]);
+  if (phase !== "app" || !ready || gone) return null;
+  const dismiss = () => setGone(true);
   const rows: [string, string][] = [
     ["ctrl+k", "find anything"],
     ["/", "agent"],

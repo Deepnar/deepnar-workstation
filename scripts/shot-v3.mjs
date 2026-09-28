@@ -81,6 +81,9 @@ await shot(page, "5-browser");
 await term("open README.md");
 await page.waitForTimeout(500);
 await shot(page, "6-buffer");
+await term("open ~/projects/systems/orien-config/README.md");
+await page.waitForTimeout(500);
+await shot(page, "6b-rail");
 
 // 7. terminal neofetch
 await term("neofetch");
@@ -124,7 +127,7 @@ await page.keyboard.press("Alt+2");
 await page.waitForTimeout(2400);
 await shot(page, "14-orbit");
 await page.keyboard.press("Alt+3");
-await page.waitForTimeout(4200);
+await page.waitForTimeout(6500); // let the force layout rest + autofit settle
 await shot(page, "15-signal");
 await page.keyboard.press("Alt+1");
 await page.waitForTimeout(1100);
