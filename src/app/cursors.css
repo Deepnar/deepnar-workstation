@@ -2,8 +2,9 @@
    ONE centralized cursor stylesheet. Every rule carries the native CSS
    keyword as fallback. No JS fake cursor anywhere on the site.
    Art: catppuccin/cursors (GPL-2.0, see public/cursors/LICENSE.catppuccin).
-   Hotspots re-derived empirically from the rendered 32px art (upstream metadata
-   was ~5px off on non-arrow cursors — the cause of the Signal hover offset). */
+   Hotspots are the upstream v2.0.0 metadata values verbatim (already in the
+   SVG 32px grid — never rescaled). Authoritative pipeline:
+   scripts/gen-cursors.mjs + scripts/cursor-hotspots-upstream.json. */
 
 /* base */
 html, body {
@@ -30,6 +31,11 @@ pre, code, .xterm, .xterm *,
 /* grab surfaces (signal graph, pet) */
 .cursor-grab {
   cursor: url("/cursors/grab.png") 15 15, grab;
+}
+/* signal node proximity: Catppuccin pointer while the picker holds a node.
+   Placed BEFORE :active so node-drag/pan (grabbing) wins while pressed. */
+canvas.cursor-grab.cursor-pointer {
+  cursor: url("/cursors/pointer.png") 13 7, pointer;
 }
 .cursor-grab:active, .active\:cursor-grabbing:active {
   cursor: url("/cursors/grabbing.png") 14 13, grabbing;

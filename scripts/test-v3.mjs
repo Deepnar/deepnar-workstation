@@ -571,17 +571,24 @@ await page.waitForTimeout(3600);
 const nodeCount39 = await page.getByLabel("graph canvas").getAttribute("data-nodes");
 check("39 graph story nodes", Number(nodeCount39) >= 30);
 
-// 40. signal coordinate consistency: screen() projector vs nodeAt() hit-test
-// agree across zoom/pan states (NOTE: this proves the event pipeline is
-// self-consistent — it does NOT validate the CSS cursor artwork hotspot;
-// that is §41 below, tested against upstream pixels, not our own code.)
+// 40. signal proximity-picker consistency: screen() projector vs the
+// magnetic picker (hover/click/dblclick share pickNode; hover adds
+// 24px-enter/32px-leave hysteresis). NOTE (audit): this proves the event
+// pipeline is self-consistent — visual cursor truth needs the debug
+// overlay (§46) + a human eye, not these asserts.
 await page.goto("http://127.0.0.1:3001/?signal-debug", { waitUntil: "domcontentloaded" });
 await page.waitForTimeout(1500);
 await page.getByRole("button", { name: /enter guest session/i }).click().catch(() => {});
 await page.waitForTimeout(1800);
 await page.keyboard.press("Alt+3");
-await page.waitForTimeout(4500);
-check("40a debug handle", await page.evaluate(() => !!window.__signal));
+// wait ONLY for the documented geometryReady condition — never an
+// arbitrary settle delay, never setView, never resize (fresh-mount repro).
+let ready = false;
+for (let i = 0; i < 40 && !ready; i++) {
+  ready = await page.evaluate(() => window.__signal?.geom().ready ?? false).catch(() => false);
+  if (!ready) await page.waitForTimeout(100);
+}
+check("40a debug handle + geometry ready", (await page.evaluate(() => !!window.__signal).catch(() => false)) && ready);
 const sigHead = await page.getByLabel("signal knowledge graph").innerText().catch(() => "");
 check("40b fitted 100%", /100%/.test(sigHead));
 const moveToNode = async (id, dy = 0) => {
@@ -606,7 +613,53 @@ for (const f of [null, 0.75, 1.5, 2]) {
 }
 check("40c hover router @fit/75/150/200", accOk);
 await setZoomF(1.5);
-check("40d label hit forge", (await moveToNode("forge", 20)) === "forge");
+check("40d proximity picks near-node (20px off-center)", (await moveToNode("forge", 20)) === "forge");
+// label rects must NOT pick: a point far below the node (40px, past LEAVE)
+// with no node nearby must clear hover — unless another node legitimately
+// holds it, in which case hover is still a node, never empty-wrong.
+{
+  const box = await page.getByLabel("graph canvas").boundingBox();
+  const pt = await page.evaluate(() => window.__signal.screen("forge"));
+  await page.mouse.move(box.x + pt[0], box.y + pt[1]);
+  await page.waitForTimeout(250);
+  const held = await page.evaluate(() => window.__signal.hover());
+  // walk straight down 44px in 4 steps (hysteresis: forge must drop past LEAVE)
+  for (let s = 1; s <= 4; s++) {
+    await page.mouse.move(box.x + pt[0], box.y + pt[1] + s * 11);
+    await page.waitForTimeout(120);
+  }
+  const after = await page.evaluate(() => window.__signal.hover());
+  check("40d2 leave-radius drops far node", after !== "forge" || held !== "forge");
+}
+// hysteresis: re-enter, then sit between ENTER and LEAVE (28px) → still held
+{
+  const box = await page.getByLabel("graph canvas").boundingBox();
+  const pt = await page.evaluate(() => window.__signal.screen("router"));
+  const cx = box.width / 2, cy = box.height / 2;
+  const ox = pt[0] - cx, oy = pt[1] - cy;
+  const len = Math.hypot(ox, oy) || 1;
+  await page.mouse.move(box.x + pt[0], box.y + pt[1]);
+  await page.waitForTimeout(250);
+  const entered = await page.evaluate(() => window.__signal.hover());
+  await page.mouse.move(box.x + pt[0] + (ox / len) * 28, box.y + pt[1] + (oy / len) * 28);
+  await page.waitForTimeout(250);
+  const held = await page.evaluate(() => window.__signal.hover());
+  check("40d3 hysteresis holds inside LEAVE", entered !== "router" || held === "router");
+}
+// cursor state follows the picker: pointer class on node, grab on background
+{
+  const box = await page.getByLabel("graph canvas").boundingBox();
+  const pt = await page.evaluate(() => window.__signal.screen("router"));
+  await page.mouse.move(box.x + pt[0], box.y + pt[1]);
+  await page.waitForTimeout(250);
+  const onNode = await page.evaluate(() => document.querySelector('canvas[aria-label="graph canvas"]')?.classList.contains("cursor-pointer") ?? null);
+  await page.mouse.move(box.x + 14, box.y + 14);
+  await page.waitForTimeout(250);
+  const onBg = await page.evaluate(() => document.querySelector('canvas[aria-label="graph canvas"]')?.classList.contains("cursor-pointer") ?? null);
+  check("40d4 cursor pointer-on-node / grab-on-bg", onNode === true && onBg === false);
+}
+// re-establish forge hover for the card check below
+await moveToNode("forge", 20);
 const sigText = await page.getByLabel("signal knowledge graph").innerText().catch(() => "");
 check("40e card matches hover", sigText.includes("presentation-forge"));
 const base = await page.evaluate(() => ({ x: window.__signal.view.current.x, y: window.__signal.view.current.y, k: window.__signal.fitK.current }));
@@ -780,6 +833,66 @@ check("40i dblclick opens artifact", await page.getByLabel("file navigation").co
     if (!heard) await page.waitForTimeout(500);
   }
   check("45 pry greets orbit uniquely", heard);
+}
+
+// 46. FRESH-MOUNT repro (the browser-zoom-heals-it bug): load from scratch,
+// enter Signal through the user path, no setView, no resize, no long wait.
+// Geometry must become ready on its own; the fit rect must equal the live
+// rect (stale-fit detector); interaction must align immediately. Then
+// remount (ws switch) and viewport-resize must preserve alignment.
+{
+  await page.goto("http://127.0.0.1:3001/?signal-debug", { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(1200);
+  await page.getByRole("button", { name: /enter guest session/i }).click().catch(() => {});
+  await page.waitForTimeout(1200);
+  await page.keyboard.press("Alt+3");
+  let g1 = null;
+  for (let i = 0; i < 40; i++) {
+    g1 = await page.evaluate(() => window.__signal?.geom()).catch(() => null);
+    if (g1?.ready) break;
+    await page.waitForTimeout(100);
+  }
+  check("46a fresh mount becomes ready", !!g1?.ready);
+  const fitMatchesLive = g1 && Math.abs(g1.rectAtFit[0] - g1.rect[0]) <= 2 && Math.abs(g1.rectAtFit[1] - g1.rect[1]) <= 2;
+  check("46b fit rect == live rect (no stale fit)", !!fitMatchesLive);
+  console.log("SIGNAL-GEOM-FRESH " + JSON.stringify(g1));
+  const box = await page.getByLabel("graph canvas").boundingBox();
+  const pt = await page.evaluate(() => window.__signal.screen("router"));
+  await page.mouse.move(box.x + pt[0], box.y + pt[1]);
+  await page.waitForTimeout(300);
+  check("46c fresh-mount hover aligns", (await page.evaluate(() => window.__signal.hover())) === "router");
+  const k1 = g1?.fitK;
+  // remount via workspace switch
+  await page.keyboard.press("Alt+1");
+  await page.waitForTimeout(800);
+  await page.keyboard.press("Alt+3");
+  let g2 = null;
+  for (let i = 0; i < 40; i++) {
+    g2 = await page.evaluate(() => window.__signal?.geom()).catch(() => null);
+    if (g2?.ready) break;
+    await page.waitForTimeout(100);
+  }
+  check("46d remount ready + same canonical fit", !!g2?.ready && g2.fitK === k1);
+  const pt2 = await page.evaluate(() => window.__signal.screen("ice"));
+  const box2 = await page.getByLabel("graph canvas").boundingBox();
+  await page.mouse.move(box2.x + pt2[0], box2.y + pt2[1]);
+  await page.waitForTimeout(300);
+  check("46e remount hover aligns", (await page.evaluate(() => window.__signal.hover())) === "ice");
+  // viewport resize (the old "repair"): alignment must survive, and the
+  // geometry values must be identical except genuinely changed dimensions.
+  const before = await page.evaluate(() => window.__signal.geom());
+  await page.setViewportSize({ width: 1400, height: 800 });
+  await page.waitForTimeout(1200);
+  const after = await page.evaluate(() => window.__signal.geom());
+  const pt3 = await page.evaluate(() => window.__signal.screen("ice"));
+  const box3 = await page.getByLabel("graph canvas").boundingBox();
+  await page.mouse.move(box3.x + pt3[0], box3.y + pt3[1]);
+  await page.waitForTimeout(300);
+  check("46f resize preserves alignment", (await page.evaluate(() => window.__signal.hover())) === "ice");
+  check("46g resize only changes dims", before.fitK !== undefined && after.ready === true
+    && Math.abs(after.rectAtFit[0] - after.rect[0]) <= 2 && Math.abs(after.rectAtFit[1] - after.rect[1]) <= 2);
+  console.log("SIGNAL-GEOM-RESIZED " + JSON.stringify(after));
+  await page.setViewportSize({ width: 1600, height: 900 });
 }
 
 // 44. the tested build IS the repo HEAD (dev serves the working tree).

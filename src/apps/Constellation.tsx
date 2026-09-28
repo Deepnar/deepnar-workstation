@@ -166,6 +166,8 @@ export function Constellation() {
     if (!cv || !wrap) return;
     const ctx = cv.getContext("2d");
     if (!ctx) return;
+    // non-null aliases: TS drops ref narrowing inside nested functions.
+    const wrapEl: HTMLElement = wrap, cvEl: HTMLCanvasElement = cv;
     // deterministic initial placement: id-hashed jitter, NO Math.random.
     // same dataset → same canonical geometry on every reload.
     const hashId = (s: string) => {
@@ -190,19 +192,20 @@ export function Constellation() {
     }
     const sim = forceSimulation<GNode>(nodes)
       .force("link", forceLink<GNode, GLink>(links).id((d) => (d as GNode).id)
-        // ghost history folds tight, real progressions sit close,
-        // thematic OSS overlaps breathe outward — no uniform chain-stretch.
+        // sparser canonical geometry for proximity picking: ghost history
+        // folds tight, real progressions sit close, thematic OSS overlaps
+        // breathe outward — no uniform chain-stretch, no full-width sprawl.
         .distance((l) => {
           const id = (x: unknown) => typeof x === "string" ? x : (x as GNode).id;
           const byId = new Map(nodes.map((n) => [n.id, n]));
           const a = byId.get(id(l.source))?.cluster, b = byId.get(id(l.target))?.cluster;
-          if (a === "ghost" || b === "ghost") return 30;
-          if (a === "oss" || b === "oss") return 64;
-          return 44;
+          if (a === "ghost" || b === "ghost") return 42;
+          if (a === "oss" || b === "oss") return 84;
+          return 62;
         })
         .strength(0.7))
-      .force("charge", forceManyBody<GNode>().strength(-70))
-      .force("collide", forceCollide<GNode>().radius((d) => RADIUS[d.size] + 12))
+      .force("charge", forceManyBody<GNode>().strength(-105))
+      .force("collide", forceCollide<GNode>().radius((d) => RADIUS[d.size] + 18))
       // soft chronology (weak X — direction, not proportional distance) +
       // gentle domain clustering (stronger Y) + strong relationship links:
       // linked eras concertina together, order preserved, gaps earned.
@@ -218,13 +221,35 @@ export function Constellation() {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     let W = 0, H = 0;
     const resize = () => {
-      const r = wrap.getBoundingClientRect();
+      measureAndApplyGeometry();
+    };
+    // ONE authoritative geometry function: mount, ResizeObserver,
+    // entrance-animation end, and fonts.ready ALL go through here.
+    // (Mount-time root cause, 2026-09-28: the .app-open wrapper plays a
+    // 260ms scale(0.93→1) entrance animation on every workspace switch.
+    // Measuring during it fits the graph to a 7%-smaller, shifted rect;
+    // the transform never fires ResizeObserver, so the stale fit survived
+    // until any real resize — exactly the "browser zoom repairs it"
+    // symptom. Fix: no canonical fit until the entrance has settled.)
+    let geomGen = 0;
+    let settled = false;
+    let geometryReady = false;
+    const rectAtFit = { w: 0, h: 0 };
+    function measureAndApplyGeometry() {
+      const r = wrapEl.getBoundingClientRect();
+      if (r.width < 50 || r.height < 50) return false;
       W = r.width; H = r.height;
-      cv.width = W * dpr; cv.height = H * dpr;
+      cvEl.width = Math.round(W * dpr); cvEl.height = Math.round(H * dpr);
+      geomGen++;
       // material container change refits the canonical view — until the
       // user deliberately pans/zooms, after which their view is preserved.
       try { if (!userView) fit(); } catch { /* fit not defined on first pass */ }
-    };
+      if (settled) {
+        geometryReady = true;
+        rectAtFit.w = r.width; rectAtFit.h = r.height;
+      }
+      return true;
+    }
     resize();
     const ro = new ResizeObserver(resize);
     ro.observe(wrap);
@@ -347,8 +372,10 @@ export function Constellation() {
     };
     fitFnRef.current = fit;
     // lifecycle: settle deterministically BEFORE first paint, normalize
-    // aspect, then establish the canonical fit exactly once. user pan/zoom
-    // after that always wins; resize refits until the user takes over.
+    // aspect — but do NOT fit yet. The canonical fit waits for the
+    // entrance to settle (animationend / motion-off-immediate), because
+    // the .app-open scale animation falsifies the mount-time rect.
+    // Positions from sim.tick are layout-independent, so they are final.
     let userView = false;
     const markTouched = () => { userView = true; };
     const settle = () => {
@@ -366,10 +393,36 @@ export function Constellation() {
         n.x = mx + (n.x - mx) * f;
         n.y = my + (n.y - my) / f;
       }
-      fit();
-      fitFnRef.current = () => { userView = false; fit(); };
     };
     settle();
+    // entrance settling: exactly one of these establishes geometry.
+    const settleEntrance = () => {
+      if (settled) { measureAndApplyGeometry(); return; }
+      settled = true;
+      measureAndApplyGeometry();
+    };
+    const appEl = wrap.closest(".app-open") as HTMLElement | null;
+    let animName = "none";
+    try { animName = getComputedStyle(appEl ?? wrap).animationName; } catch { /* noop */ }
+    if (!appEl || animName === "none") {
+      // reduced-motion / no entrance animation: layout is final now.
+      settleEntrance();
+    } else {
+      appEl.addEventListener("animationend", settleEntrance, { once: true });
+    }
+    // the fit button / "0" key: restore canonical geometry and hand future
+    // resizes back to the canonical view (user re-takes over on next pan).
+    fitFnRef.current = () => { userView = false; if (settled) measureAndApplyGeometry(); else fit(); };
+    // label metrics depend on loaded fonts: recompute + refit (unless the
+    // user already took over) once the browser has final text geometry.
+    try {
+      document.fonts?.ready.then(() => {
+        for (const n of NODES) {
+          try { labelW.set(n.id, ctx.measureText(n.label).width); } catch { /* keep */ }
+        }
+        if (!userView) measureAndApplyGeometry();
+      });
+    } catch { /* noop */ }
 
     // dev-only pointer diagnostic (§30): ?signal-debug exposes the live
     // view + a world→screen projector so tests drive the REAL event
@@ -404,8 +457,12 @@ export function Constellation() {
       };
       function r1(v: number) { return Math.round(v * 10) / 10; }
     };
+    const debugMode = (() => {
+      try { return new URLSearchParams(window.location.search).has("signal-debug"); }
+      catch { return false; }
+    })();
     try {
-      if (new URLSearchParams(window.location.search).has("signal-debug")) {
+      if (debugMode) {
         (window as unknown as { __signal?: unknown }).__signal = {
           view: viewRef,
           nodes: nodesRef,
@@ -421,6 +478,20 @@ export function Constellation() {
           hover: () => hoverRef.current,
           pct: () => `${Math.round((viewRef.current.k / Math.max(1e-9, fitKRef.current)) * 100)}%`,
           measure,
+          geom: () => {
+            const r = wrap.getBoundingClientRect();
+            const v = viewRef.current;
+            return {
+              ready: geometryReady, settled, gen: geomGen,
+              rect: [Math.round(r.width), Math.round(r.height)],
+              client: [cv.clientWidth, cv.clientHeight],
+              backing: [cv.width, cv.height],
+              dpr, W: Math.round(W), H: Math.round(H),
+              fitK: +fitKRef.current.toFixed(3),
+              zoom: +v.k.toFixed(3), pan: [+v.x.toFixed(1), +v.y.toFixed(1)],
+              rectAtFit: [Math.round(rectAtFit.w), Math.round(rectAtFit.h)],
+            };
+          },
         };
       }
     } catch { /* noop */ }
@@ -501,6 +572,54 @@ export function Constellation() {
         }
       }
       ctx.globalAlpha = 1;
+      // ?signal-debug ONLY: human visual oracle. Cross = the browser event
+      // position (must sit at the custom cursor's logical tip), ENTER/LEAVE
+      // circles, line to the picked node + numeric readout. Never drawn in
+      // production — the pick radius stays invisible there.
+      if (debugMode && dbgEvt.x >= 0) {
+        const ex = dbgEvt.x, ey = dbgEvt.y;
+        ctx.save();
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = "#ff5f5f";
+        ctx.beginPath();
+        ctx.moveTo(ex - 7, ey); ctx.lineTo(ex + 7, ey);
+        ctx.moveTo(ex, ey - 7); ctx.lineTo(ex, ey + 7);
+        ctx.stroke();
+        ctx.beginPath(); ctx.arc(ex, ey, ENTER, 0, Math.PI * 2); ctx.stroke();
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath(); ctx.arc(ex, ey, LEAVE, 0, Math.PI * 2); ctx.stroke();
+        ctx.setLineDash([]);
+        if (dbgPick.id) {
+          const pn = byId.get(dbgPick.id);
+          if (pn && pn.x != null && pn.y != null) {
+            const [px, py] = toScreen(pn.x, pn.y);
+            ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(px, py); ctx.stroke();
+          }
+        }
+        ctx.font = "11px monospace";
+        ctx.textAlign = "left";
+        ctx.fillStyle = "#ff5f5f";
+        const dTxt = dbgPick.d === Infinity ? "—" : `${dbgPick.d.toFixed(1)}px`;
+        ctx.fillText(`pointer: ${Math.round(ex)},${Math.round(ey)}`, ex + 36, ey - 30);
+        ctx.fillText(`candidate: ${dbgPick.id ?? "none"}`, ex + 36, ey - 16);
+        ctx.fillText(`distance: ${dTxt}  enter: ${ENTER}  leave: ${LEAVE}`, ex + 36, ey - 2);
+        // BLUE = graph round-trip (event → world → screen). Overlaps red
+        // when the view math is self-consistent. NOTE: this cannot catch a
+        // stale FIT (fit poisons both directions equally) — the stale-fit
+        // detector is rectAtFit-vs-live-rect in geom(), not this cross.
+        const [wx, wy] = toWorld(ex, ey);
+        const [bx, by] = toScreen(wx, wy);
+        ctx.strokeStyle = "#2f6fff";
+        ctx.beginPath();
+        ctx.moveTo(bx - 5, by); ctx.lineTo(bx + 5, by);
+        ctx.moveTo(bx, by - 5); ctx.lineTo(bx, by + 5);
+        ctx.stroke();
+        // geometry strip: the values that diagnose mount-vs-resize defects
+        ctx.fillStyle = "#2f6fff";
+        const g = `rect:${Math.round(wrap.clientWidth)}x${Math.round(wrap.clientHeight)} backing:${cv.width}x${cv.height} dpr:${dpr} W/H:${Math.round(W)}/${Math.round(H)} fit:${fitKRef.current.toFixed(2)} gen:${geomGen} ready:${geometryReady ? 1 : 0} fitrect:${Math.round(rectAtFit.w)}x${Math.round(rectAtFit.h)}`;
+        ctx.fillText(g, 12, 18);
+        ctx.restore();
+      }
       raf = requestAnimationFrame(drawFrame);
     };
     raf = requestAnimationFrame(drawFrame);
@@ -514,38 +633,69 @@ export function Constellation() {
       const r = cv.getBoundingClientRect();
       return { x: e.clientX - r.left, y: e.clientY - r.top };
     };
-    // Hit test in SCREEN space against the same geometry draw emits:
-    // tight circle (rendered radius + 8px usability margin, §31) plus the
-    // node's own label rect when labels are visible. Nearest eligible node
-    // wins — no DOM-order dependence, no giant invisible hit circles.
-    const nodeAt = (sx: number, sy: number) => {
-      const v = viewRef.current;
-      let best: GNode | null = null, bestScore = Infinity;
+    // Obsidian-like magnetic proximity picker: ONE rule for hover, click,
+    // double-click, shift+click and drag start. Nearest node in SCREEN space
+    // inside ENTER wins — zoom never changes targetability, label rects play
+    // no part. Hysteresis: an active node holds until past LEAVE or a rival
+    // is materially closer (no 1px Voronoi flicker). Linear scan: ~39 nodes.
+    const ENTER = 24, LEAVE = 32, SWITCH_MARGIN = 4;
+    let activeId: string | null = null;
+    const dbgEvt = { x: -1, y: -1 };
+    const dbgPick: { id: string | null; d: number } = { id: null, d: Infinity };
+    const byId = new Map(nodes.map((n) => [n.id, n]));
+    const pickNode = (sx: number, sy: number): GNode | null => {
+      let best: GNode | null = null, bd = Infinity;
       for (const n of nodes) {
         if (n.x == null || n.y == null) continue;
         const [nx, ny] = toScreen(n.x, n.y);
-        const r = RADIUS[n.size] * (0.7 + 0.3 * v.k);
         const d = Math.hypot(sx - nx, sy - ny);
-        let inLabel = false;
-        if (n.size === "flagship" || v.k > 1.35) {
-          const hw = (labelW.get(n.id) ?? 60) / 2 + 6;
-          inLabel = sx >= nx - hw && sx <= nx + hw && sy >= ny + r + 1 && sy <= ny + r + 25;
-        }
-        if (d > r + 8 && !inLabel) continue;
-        const score = d <= r + 8 ? d : Math.abs(sx - nx) + Math.abs(sy - (ny + r + 13)) * 0.25;
-        if (score < bestScore) { bestScore = score; best = n; }
+        if (d < bd) { bd = d; best = n; }
       }
-      return best;
+      return bd <= ENTER ? best : null;
+    };
+    const hoverPick = (sx: number, sy: number): GNode | null => {
+      const dists = new Map<string, number>();
+      let best: GNode | null = null, bd = Infinity;
+      for (const n of nodes) {
+        if (n.x == null || n.y == null) continue;
+        const [nx, ny] = toScreen(n.x, n.y);
+        const d = Math.hypot(sx - nx, sy - ny);
+        dists.set(n.id, d);
+        if (d < bd) { bd = d; best = n; }
+      }
+      if (!best) { activeId = null; }
+      else if (activeId == null) {
+        if (bd <= ENTER) activeId = best.id;
+      } else {
+        const ad = dists.get(activeId);
+        if (ad == null || ad > LEAVE) {
+          activeId = bd <= ENTER ? best.id : null;
+        } else if (best.id !== activeId && bd <= ENTER && bd < ad - SWITCH_MARGIN) {
+          activeId = best.id;
+        }
+      }
+      const act = activeId ? byId.get(activeId) ?? null : null;
+      dbgPick.id = activeId;
+      dbgPick.d = activeId ? dists.get(activeId) ?? Infinity : Infinity;
+      return act;
+    };
+    const setPointerCursor = (on: boolean) => {
+      if (on) cv.classList.add("cursor-pointer");
+      else cv.classList.remove("cursor-pointer");
     };
 
     let dragNode: GNode | null = null;
     let panning = false, lx = 0, ly = 0, moved = false;
     const onDown = (e: PointerEvent) => {
+      if (!settled) settleEntrance();
+      if (!geometryReady) return;
       markTouched();
       cv.setPointerCapture(e.pointerId);
       const p = at(e);
-      dragNode = nodeAt(p.x, p.y);
+      dragNode = pickNode(p.x, p.y);
       if (dragNode) {
+        activeId = dragNode.id;
+        setPointerCursor(true);
         sim.alphaTarget(0.15).restart();
         dragNode.fx = dragNode.x; dragNode.fy = dragNode.y;
       } else { panning = true; lx = p.x; ly = p.y; }
@@ -553,6 +703,7 @@ export function Constellation() {
     };
     const onMove = (e: PointerEvent) => {
       const p = at(e);
+      dbgEvt.x = p.x; dbgEvt.y = p.y;
       if (dragNode) {
         const [wx, wy] = toWorld(p.x, p.y);
         dragNode.fx = wx; dragNode.fy = wy;
@@ -563,7 +714,8 @@ export function Constellation() {
         lx = p.x; ly = p.y;
         moved = true;
       } else {
-        const n = nodeAt(p.x, p.y);
+        const n = geometryReady ? hoverPick(p.x, p.y) : null;
+        setPointerCursor(!!n);
         setHover(n ? n.id : null);
       }
     };
@@ -590,10 +742,13 @@ export function Constellation() {
         panning = false;
         if (!moved) { setSel(null); setPins([]); }
       }
+      setPointerCursor(!!hoverPick(dbgEvt.x, dbgEvt.y));
       void e;
     };
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
+      if (!settled) settleEntrance();
+      if (!geometryReady) return;
       markTouched();
       const v = viewRef.current;
       const p = at(e);
@@ -605,7 +760,7 @@ export function Constellation() {
     };
     const onDbl = (e: MouseEvent) => {
       const p = at(e);
-      const n = nodeAt(p.x, p.y);
+      const n = pickNode(p.x, p.y);
       if (n) open(n.id);
     };
     const onKey = (e: KeyboardEvent) => {
