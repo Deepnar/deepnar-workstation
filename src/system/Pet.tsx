@@ -681,11 +681,11 @@ export function Pet({ anchor }: { anchor: "desktop" | "status" }) {
   return (
     <div className="fixed z-[45]" style={{ left: `${pos.x}%`, bottom: 56 + -pos.y, transition: "left 70ms linear" }}>
       {quip && (
-        <div className={`absolute -top-7 px-2 py-[3px] text-[12px] border text-center max-w-[min(68vw,300px)] ${pos.x < 28 ? "left-0" : pos.x > 72 ? "right-0" : "left-1/2 -translate-x-1/2"}`}
-          style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--fg)", overflowWrap: "break-word", wordBreak: "normal" }}
+        <div className="absolute -top-7 left-1/2 -translate-x-1/2 whitespace-nowrap px-2 py-[3px] text-[12px] border"
+          style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--fg)" }}
           aria-live="polite">
           {quip}
-          <span className={`absolute -bottom-[5px] w-2 h-2 rotate-45 border-r border-b ${pos.x < 28 ? "left-3" : pos.x > 72 ? "right-3" : "left-1/2 -translate-x-1/2"}`}
+          <span className="absolute left-1/2 -translate-x-1/2 -bottom-[5px] w-2 h-2 rotate-45 border-r border-b"
             style={{ background: "var(--surface)", borderColor: "var(--border)" }} />
         </div>
       )}
