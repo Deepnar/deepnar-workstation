@@ -72,7 +72,6 @@ needs them:
 |---|---|---|
 | `NEXT_PUBLIC_UPSTASH_URL` | browser | Orbit global leaderboard (REST) |
 | `NEXT_PUBLIC_UPSTASH_TOKEN` | browser | same — public by design (v1), see below |
-| `NEXT_PUBLIC_SITE_URL` | build | absolute OG/canonical URLs in production |
 
 Copy `.env.example` to `.env.local` if you want the leaderboard locally.
 Without them, Orbit keeps a local best score and everything else is
@@ -115,9 +114,9 @@ nothing from private CV source material ships (see `.env.example` +
 ## Deploy
 
 Static site — no server runtime. Push to GitHub → import in Vercel →
-`npm ci` / `npm run build` / default output. Set the three public env vars
-above (Upstash now, `SITE_URL` once the `*.vercel.app` URL is known, then
-rebuild).
+`npm ci` / `npm run build` / default output. Set the two Upstash vars for the
+leaderboard. Social metadata is fixed to the production URL in
+`src/app/layout.tsx` — no env var needed.
 
 ## License / attribution
 
