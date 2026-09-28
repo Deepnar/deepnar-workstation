@@ -79,13 +79,14 @@ const browser = await chromium.launch({ executablePath: "/opt/google/chrome/chro
   try { await page.click("[aria-label='welcome'] button", { timeout: 3000 }); await page.waitForTimeout(400); } catch {}
   await page.keyboard.press("Alt+2");
   await page.waitForTimeout(4500); // countdown 3..2..1
-  check("T7 orbit touch controls visible", !!(await page.$('[aria-label="thrust controls"]')) && !!(await page.$('[aria-label="brake"]')) && !!(await page.$('[aria-label="pause game"]')));
-  // hold thrust-up via real CDP touch events
-  const btn = await page.$('[aria-label="thrust up"]');
-  const bb = await btn.boundingBox();
+  check("T7 orbit stick + brake visible, no pause", !!(await page.$('[aria-label="thrust stick"]')) && !!(await page.$('[aria-label="brake"]')) && !(await page.$('[aria-label="pause game"]')));
+  // drag stick upper-right via real CDP touch events
+  const stick = await page.$('[aria-label="thrust stick"]');
+  const bb = await stick.boundingBox();
   const cx = bb.x + bb.width / 2, cy = bb.y + bb.height / 2;
   const cdp = await ctx.newCDPSession(page);
   await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: cx, y: cy, id: 1 }] });
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: cx + 40, y: cy - 40, id: 1 }] });
   await page.waitForTimeout(700);
   const keys = await page.evaluate(() => window.__orbit?.keys() ?? null);
   const shipA = await page.evaluate(() => window.__orbit?.ship());
@@ -93,15 +94,10 @@ const browser = await chromium.launch({ executablePath: "/opt/google/chrome/chro
   await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
   await page.waitForTimeout(300);
   const keysAfter = await page.evaluate(() => window.__orbit?.keys() ?? null);
-  check("T8 hold feeds keys (arrowup)", Array.isArray(keys) && keys.includes("arrowup"));
+  check("T8 stick feeds keys (up+right diagonal)", Array.isArray(keys) && keys.includes("arrowup") && keys.includes("arrowright"));
   check("T9 release clears keys", Array.isArray(keysAfter) && keysAfter.length === 0);
   check("T10 ship has velocity after thrust", shipA && Math.hypot(shipA.vx, shipA.vy) > 0.05);
-  // pause button
-  await page.tap('[aria-label="pause game"]');
-  await page.waitForTimeout(400);
-  check("T11 touch pause works", (await page.evaluate(() => window.__orbit?.paused())) === true);
-  await page.tap('[aria-label="resume game"]');
-  await page.waitForTimeout(300);
+  check("T11 no pause button on touch", !(await page.$('[aria-label="pause game"]')));
   check("T12 no page errors orbit", errs.length === 0);
   await ctx.close();
 }

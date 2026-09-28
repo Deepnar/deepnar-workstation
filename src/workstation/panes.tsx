@@ -182,7 +182,7 @@ export function MiniCalendar() {
                   key={d.date}
                   title={`${d.date} — ${d.count} contribution${d.count === 1 ? "" : "s"}`}
                   onMouseEnter={() => setHover(d)}
-                  className="w-[7px] h-[7px] rounded-[2px]"
+                  className="w-[7px] h-[7px] rounded-[2px] cal-cell"
                   style={{
                     background: level(d.count) === 0 ? "var(--border)" : "var(--ok)",
                     opacity: level(d.count) === 0 ? 0.4 : 0.25 + level(d.count) * 0.19,
@@ -194,7 +194,7 @@ export function MiniCalendar() {
           ))}
         </div>
       </div>
-      <div className="text-[11.5px] h-4 mt-1" style={{ color: "var(--icy)" }} aria-live="polite">
+      <div className="text-[11.5px] h-4 mt-1 cal-count" style={{ color: "var(--icy)" }} aria-live="polite">
         {hover ? `${hover.date} — ${hover.count}` : `${cal.total.toLocaleString()} in the last year`}
       </div>
     </div>
@@ -217,7 +217,7 @@ const ACTIONS: { key: string; label: string; run: () => void }[] = [
 function BlockLogo() {
   return (
     <img src="/deepnar-wordmark.png" alt="DEEPNAR" width={520} height={191}
-      className="w-full max-w-[440px] h-auto select-none" draggable={false}
+      className="w-full max-w-[440px] h-auto select-none home-logo" draggable={false}
       style={{ borderRadius: 10, border: "1px solid var(--border)" }} />
   );
 }
@@ -226,12 +226,12 @@ export function HomeView() {
   const { recent, openFile } = useShell();
   const recentShown = (recent.length > 0 ? recent : [`${HOME}/projects/ice/README.md`, `${HOME}/research/lsrep-ice/README.md`, `${HOME}/oss/merged/mne-python-14283.md`]).slice(0, 5);
   return (
-    <div className="h-full overflow-auto px-6 py-5">
+    <div className="h-full overflow-auto px-6 py-5 home-root">
       <div className="min-h-full flex flex-col items-center justify-center">
       <BlockLogo />
       <div className="text-[12.5px] mt-2 mb-1" style={{ color: "var(--muted)" }}>{profile.tagline}</div>
       <div className="text-[11px] mb-3" style={{ color: "var(--faint)" }}>Deepesh Sonar · AI Systems · Research · Software Engineering</div>
-      <div className="w-full max-w-2xl grid gap-4 md:grid-cols-2 justify-items-center md:justify-items-stretch">
+      <div className="w-full max-w-[440px] grid gap-4 md:grid-cols-2 justify-items-center md:justify-items-stretch">
         <div role="list" aria-label="quick actions" className="w-full max-w-[300px] md:max-w-none">
           {ACTIONS.map((a) => (
             <button key={a.key} role="listitem" onClick={() => { sound.select(); a.run(); }}
@@ -241,7 +241,7 @@ export function HomeView() {
             </button>
           ))}
         </div>
-        <div className="w-full max-w-[300px] md:max-w-none">
+        <div className="w-full max-w-[300px] md:max-w-none recent-list">
           <div className="text-[10.5px] uppercase tracking-[0.16em] px-3 mb-1" style={{ color: "var(--muted)" }}>recent</div>
           {recentShown.map((r) => (
             <button key={r} onClick={() => { const n = findNode(r); if (n) { sound.fileOpen(); openFile(r, n.kind); } }}
@@ -272,10 +272,10 @@ export function AchievementsStrip() {
       <div className="text-[10.5px] uppercase tracking-[0.16em] mb-2 text-center" style={{ color: "var(--muted)" }}>
         <a href="https://github.com/Deepnar?tab=achievements" target="_blank" rel="noreferrer" className="hover:underline">achievements ↗</a>
       </div>
-      <div className="flex gap-4 overflow-x-auto justify-center px-2" role="list" aria-label="github achievements">
+      <div className="flex gap-4 overflow-x-auto justify-center px-2 ach-strip" role="list" aria-label="github achievements">
         {achievements.map((a) => (
           <div key={a.slug} role="listitem" title={`${a.name}${a.tier ? ` ${a.tier}` : ""} — ${a.meaning}`}
-            className="flex flex-col items-center gap-1 shrink-0 w-[84px]">
+            className="flex flex-col items-center gap-1 shrink-0 w-[84px] ach-item">
             <img src={a.img} alt={`${a.name} achievement badge`} width={44} height={44}
               className="rounded-full select-none" draggable={false}
               style={{ border: "1px solid var(--border)" }} />

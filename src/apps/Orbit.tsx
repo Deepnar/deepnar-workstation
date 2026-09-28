@@ -49,6 +49,36 @@ export function Orbit() {
   };
   const togglePauseRef = useRef(togglePause);
   togglePauseRef.current = togglePause;
+  // virtual stick: one thumb drives the SAME arrow keys the keyboard uses.
+  // drag direction sets keys (diagonals included), release clears. desktop untouched.
+  const stickBaseRef = useRef<HTMLDivElement>(null);
+  const stickKnobRef = useRef<HTMLDivElement>(null);
+  const stickId = useRef<number | null>(null);
+  const setStick = (dx: number, dy: number) => {
+    const keys = stateRef.current.keys;
+    keys.delete("arrowup"); keys.delete("arrowdown"); keys.delete("arrowleft"); keys.delete("arrowright");
+    const dz = 0.3;
+    if (dy < -dz) keys.add("arrowup");
+    if (dy > dz) keys.add("arrowdown");
+    if (dx < -dz) keys.add("arrowleft");
+    if (dx > dz) keys.add("arrowright");
+    if (stickKnobRef.current) stickKnobRef.current.style.transform = `translate(${(dx * 32).toFixed(1)}px,${(dy * 32).toFixed(1)}px)`;
+  };
+  const stickMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (stickId.current !== e.pointerId) return;
+    const base = stickBaseRef.current?.getBoundingClientRect();
+    if (!base) return;
+    let dx = (e.clientX - (base.left + base.width / 2)) / (base.width / 2);
+    let dy = (e.clientY - (base.top + base.height / 2)) / (base.height / 2);
+    const m = Math.hypot(dx, dy);
+    if (m > 1) { dx /= m; dy /= m; }
+    setStick(dx, dy);
+  };
+  const stickEnd = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (stickId.current !== e.pointerId) return;
+    stickId.current = null;
+    setStick(0, 0);
+  };
   // hold-to-thrust: feeds the SAME keys set the keyboard uses. release stops.
   const hold = (key: string) => ({
     onPointerDown: (e: React.PointerEvent<HTMLButtonElement>) => {
@@ -61,7 +91,27 @@ export function Orbit() {
     onLostPointerCapture: () => { stateRef.current.keys.delete(key); },
     onContextMenu: (e: React.SyntheticEvent) => { e.preventDefault(); },
   });
-  const submittedRef = useRef(false);
+  // live-best mirror (state lags inside the game loop) + live global submit:
+  // the board updates WHILE you fly, not only when you die — a run that
+  // never ends still banks its best. throttled to one submit per 15s.
+  const bestRef = useRef(0);
+  const submittedScoreRef = useRef(0);
+  const lastSubmitRef = useRef(0);
+  const bankBest = (score: number) => {
+    if (score <= bestRef.current) return;
+    bestRef.current = score;
+    setBest(score);
+    try {
+      localStorage.setItem("deepnar-orbit-best", String(score));
+    } catch { /* noop */ }
+    if (leaderboardOn() && score > submittedScoreRef.current && Date.now() - lastSubmitRef.current > 15000) {
+      lastSubmitRef.current = Date.now();
+      submittedScoreRef.current = score;
+      submitScore(score)
+        .then(() => topScores(5).then(setTop).catch(() => {}))
+        .catch(() => {});
+    }
+  };
   const stateRef = useRef({
     bodies: [] as Body[], particles: [] as Particle[], pops: [] as Pop[], rings: [] as Ring[],
     px: 0, py: 0, vx: 0, vy: 0, angle: -Math.PI / 2, keys: new Set<string>(),
@@ -70,7 +120,9 @@ export function Orbit() {
 
   useEffect(() => {
     try {
-      setBest(Number(localStorage.getItem("deepnar-orbit-best") ?? 0));
+      const b = Number(localStorage.getItem("deepnar-orbit-best") ?? 0);
+      bestRef.current = b;
+      setBest(b);
     } catch {
       /* noop */
     }
@@ -102,7 +154,8 @@ export function Orbit() {
     setLives(5);
     setPaused(false);
     setCount(3);
-    submittedRef.current = false;
+    submittedScoreRef.current = 0;
+    lastSubmitRef.current = 0;
     if (leaderboardOn()) topScores(5).then(setTop).catch(() => {});
 
     const spawn = () => {
@@ -200,6 +253,7 @@ export function Orbit() {
             if (b.kind === "signal") {
               st.score += 10;
               setScore(st.score);
+              bankBest(st.score);
               sound.select();
               st.rings.push({ x: b.x, y: b.y, r: 6, life: 26 });
               st.pops.push({ x: b.x, y: b.y - 14, text: "+10", life: 40 });
@@ -220,21 +274,14 @@ export function Orbit() {
               if (st.lives <= 0) {
                 st.alive = false;
                 setOver(true);
-                if (leaderboardOn() && !submittedRef.current) {
-                  submittedRef.current = true;
+                // final catch-up: bank whatever the live throttle hasn't yet
+                if (leaderboardOn() && st.score > submittedScoreRef.current) {
+                  submittedScoreRef.current = st.score;
                   submitScore(st.score)
                     .then(() => topScores(5).then(setTop).catch(() => {}))
                     .catch(() => {});
                 }
-                setBest((bb) => {
-                  const nb = Math.max(bb, st.score);
-                  try {
-                    localStorage.setItem("deepnar-orbit-best", String(nb));
-                  } catch {
-                    /* noop */
-                  }
-                  return nb;
-                });
+                bankBest(st.score);
               }
             }
           }
@@ -462,18 +509,17 @@ export function Orbit() {
           onKeyDown={(e) => { if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(e.key)) e.preventDefault(); }} />
         {touchUI && !over && (
           <>
-            <div className="absolute left-3 bottom-3 z-10 grid grid-cols-3 gap-1.5 select-none" role="group" aria-label="thrust controls" style={{ touchAction: "none", paddingBottom: "env(safe-area-inset-bottom)" }}>
-              <span />
-              <button aria-label="thrust up" className="w-12 h-12 border text-[18px]" style={{ background: "color-mix(in srgb, var(--surface) 78%, transparent)", borderColor: "var(--border)", color: "var(--fg-dim)" }} {...hold("arrowup")}>▲</button>
-              <span />
-              <button aria-label="thrust left" className="w-12 h-12 border text-[18px]" style={{ background: "color-mix(in srgb, var(--surface) 78%, transparent)", borderColor: "var(--border)", color: "var(--fg-dim)" }} {...hold("arrowleft")}>◀</button>
-              <button aria-label="thrust down" className="w-12 h-12 border text-[18px]" style={{ background: "color-mix(in srgb, var(--surface) 78%, transparent)", borderColor: "var(--border)", color: "var(--fg-dim)" }} {...hold("arrowdown")}>▼</button>
-              <button aria-label="thrust right" className="w-12 h-12 border text-[18px]" style={{ background: "color-mix(in srgb, var(--surface) 78%, transparent)", borderColor: "var(--border)", color: "var(--fg-dim)" }} {...hold("arrowright")}>▶</button>
+            <div ref={stickBaseRef} role="group" aria-label="thrust stick"
+              className="absolute left-3 bottom-3 z-10 rounded-full border select-none"
+              style={{ width: 112, height: 112, touchAction: "none", paddingBottom: 0, marginBottom: "env(safe-area-inset-bottom)", background: "color-mix(in srgb, var(--surface) 55%, transparent)", borderColor: "var(--border)" }}
+              onPointerDown={(e) => { e.preventDefault(); stickId.current = e.pointerId; try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* noop */ } stickMove(e); }}
+              onPointerMove={stickMove} onPointerUp={stickEnd} onPointerCancel={stickEnd}>
+              <div ref={stickKnobRef} aria-hidden
+                className="absolute left-1/2 top-1/2 rounded-full border"
+                style={{ width: 48, height: 48, marginLeft: -24, marginTop: -24, background: "color-mix(in srgb, var(--surface) 85%, transparent)", borderColor: "var(--fg-dim)" }} />
             </div>
             <div className="absolute right-3 bottom-3 z-10 flex gap-1.5 select-none" style={{ touchAction: "none", paddingBottom: "env(safe-area-inset-bottom)" }}>
               <button aria-label="brake" className="w-12 h-12 border text-[13px] font-bold" style={{ background: "color-mix(in srgb, var(--surface) 78%, transparent)", borderColor: "var(--accent)", color: "var(--accent-soft)" }} {...hold(" ")}>brake</button>
-              <button aria-label={paused ? "resume game" : "pause game"} className="w-12 h-12 border text-[16px]" style={{ background: "color-mix(in srgb, var(--surface) 78%, transparent)", borderColor: "var(--border)", color: "var(--fg-dim)" }}
-                onClick={() => { togglePause(); sound.tick(1); }}>{paused ? "▶" : "⏸"}</button>
             </div>
             {portrait && !portraitHintOff && (
               <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 px-3 py-1.5 border text-[11.5px] whitespace-nowrap" style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--muted)" }} role="note">
@@ -500,13 +546,13 @@ export function Orbit() {
           <div className="absolute inset-0 grid place-items-center" style={{ background: "rgba(3,4,8,0.55)" }}>
             <div className="text-center space-y-1">
               <div className="text-[20px] font-bold" style={{ color: "var(--fg)" }}>hull breached · {score} signals</div>
-              <div className="text-[12px]" style={{ color: "var(--muted)" }}>{touchUI ? "hold ▲▼◀▶ to thrust · brake slows you · drag also works" : "arrows / wasd · space brakes · esc pauses · touch drags"}</div>
+              <div className="text-[12px]" style={{ color: "var(--muted)" }}>{touchUI ? "drag the stick to thrust · brake slows you · drag also works" : "arrows / wasd · space brakes · esc pauses · touch drags"}</div>
             </div>
           </div>
         )}
       </div>
       <div className="px-4 py-1.5 text-[11.5px] border-t shrink-0" style={{ borderColor: "var(--border)", color: "var(--muted)" }}>
-        {touchUI ? "hold ▲▼◀▶ to thrust · brake slows you · catch ~ · dodge rock · 5 hits out"
+        {touchUI ? "drag the stick to thrust · brake slows you · catch ~ · dodge rock · 5 hits out"
         : "arrows / wasd to thrust · space to brake · esc pauses · catch ~ · dodge rock · 5 hits out"}
       </div>
     </div>

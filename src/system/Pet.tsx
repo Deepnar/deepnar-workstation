@@ -302,7 +302,21 @@ export function Pet({ anchor }: { anchor: "desktop" | "status" }) {
     force((n) => n + 1);
   };
   const say = (text: string, ms = 4200) => {
-    setQuip(text);
+    // phones get the short version: the bubble is single-line, so long
+    // lines are cut at a word boundary (paths keep their tail). desktop
+    // hears the full line, unchanged.
+    let line = text;
+    try {
+      if (window.matchMedia("(max-width: 639px)").matches && text.length > 34) {
+        if (!/\s/.test(text) && text.includes("/")) line = "…" + text.slice(-30);
+        else {
+          const cut = text.slice(0, 34);
+          const sp = cut.lastIndexOf(" ");
+          line = (sp > 12 ? cut.slice(0, sp) : cut) + "…";
+        }
+      }
+    } catch { /* noop */ }
+    setQuip(line);
     if (quipTimer.current) clearTimeout(quipTimer.current);
     quipTimer.current = setTimeout(() => setQuip(null), ms);
   };
