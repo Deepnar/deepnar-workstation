@@ -4,8 +4,7 @@
 
 ![Deepnar Workstation — social banner](public/github-social-preview.png)
 
-**Live demo:** coming with the first Vercel deploy (this repo has not been
-deployed yet — no URL is claimed until then).
+**Live demo:** https://deepnar-workstation.vercel.app
 
 An interactive portfolio that behaves like a small research workstation, not
 a page of cards. You enter a guest session, open the workstation, and explore
