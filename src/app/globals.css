@@ -337,7 +337,7 @@ html[data-motion="off"] *::after {
   .home-root .ach-strip { overflow-x: auto !important; justify-content: safe center !important; row-gap: 6px !important; column-gap: 4px !important; padding-left: 0 !important; padding-right: 0 !important; }
   .home-root .ach-item { width: 44px !important; }
   .home-root .ach-item img { width: 24px !important; height: 24px !important; }
-  .home-root .ach-item > div { font-size: 9px !important; }
+  .home-root .ach-item > div { font-size: 9px !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; max-width: 100% !important; }
   /* hover readout + yearly total need hover; on touch the graph speaks for
      itself — hiding buys 20px toward the no-scroll budget */
   .home-root .cal-count { display: none !important; }

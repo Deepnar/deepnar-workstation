@@ -142,23 +142,21 @@ if (nTabs >= 1) {
   check("middle-click closes buffer", (await tabs.count()) === nTabs - 1);
 } else check("middle-click closes buffer (no tabs)", true);
 
-// 10. resize explorer + persist
-const sep = page.getByLabel("resize explorer");
-const expBefore = await page.getByLabel("file explorer").boundingBox().then((b) => b?.width ?? 0);
-const sepBox = await sep.boundingBox();
-if (sepBox) {
-  await page.mouse.move(sepBox.x + 2, sepBox.y + sepBox.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(sepBox.x + 80, sepBox.y + sepBox.height / 2, { steps: 8 });
-  await page.mouse.up();
-  await page.waitForTimeout(300);
-}
-const expAfter = await page.getByLabel("file explorer").boundingBox().then((b) => b?.width ?? 0);
-check("explorer resizes", expAfter > expBefore + 30);
+// 10. explorer: no drag handle — button-only toggle, layout persists
+check("no explorer drag handle", (await page.getByLabel("resize explorer").count()) === 0);
+const expFull = await page.getByLabel("file explorer").boundingBox().then((b) => b?.width ?? 0);
+await page.getByLabel("toggle file tree").click();
+await page.waitForTimeout(400);
+const expGone = await page.getByLabel("file explorer").boundingBox().then((b) => b?.width ?? 0).catch(() => 0);
+check("toggle collapses explorer", expGone < 5);
+await page.getByLabel("toggle file tree").click();
+await page.waitForTimeout(400);
+const expBack = await page.getByLabel("file explorer").boundingBox().then((b) => b?.width ?? 0);
+check("toggle re-opens explorer", expBack > 100 && Math.abs(expBack - expFull) < 40);
 await page.reload({ waitUntil: "domcontentloaded" });
 await page.waitForTimeout(1500);
 const expPersist = await page.getByLabel("file explorer").boundingBox().then((b) => b?.width ?? 0).catch(() => 0);
-check("explorer size persists", Math.abs(expPersist - expAfter) < 40);
+check("explorer layout persists", expPersist > 100);
 
 // 11. real wheel scroll on a tall surface (fully expanded tree)
 await page.goto("http://127.0.0.1:3001/", { waitUntil: "domcontentloaded" });

@@ -182,7 +182,7 @@ export function MiniCalendar() {
                   key={d.date}
                   title={`${d.date} — ${d.count} contribution${d.count === 1 ? "" : "s"}`}
                   onMouseEnter={() => setHover(d)}
-                  className="w-[7px] h-[7px] rounded-[2px] cal-cell"
+                  className="w-[7px] h-[7px] md:w-[8px] md:h-[8px] rounded-[2px] cal-cell"
                   style={{
                     background: level(d.count) === 0 ? "var(--border)" : "var(--ok)",
                     opacity: level(d.count) === 0 ? 0.4 : 0.25 + level(d.count) * 0.19,
@@ -217,7 +217,7 @@ const ACTIONS: { key: string; label: string; run: () => void }[] = [
 function BlockLogo() {
   return (
     <img src="/deepnar-wordmark.png" alt="DEEPNAR" width={520} height={191}
-      className="w-full max-w-[440px] h-auto select-none home-logo" draggable={false}
+      className="w-full max-w-[440px] md:max-w-[560px] h-auto select-none home-logo" draggable={false}
       style={{ borderRadius: 10, border: "1px solid var(--border)" }} />
   );
 }
@@ -229,14 +229,14 @@ export function HomeView() {
     <div className="h-full overflow-auto px-6 py-5 home-root">
       <div className="min-h-full flex flex-col items-center justify-center">
       <BlockLogo />
-      <div className="text-[12.5px] mt-2 mb-1" style={{ color: "var(--muted)" }}>{profile.tagline}</div>
-      <div className="text-[11px] mb-3" style={{ color: "var(--faint)" }}>Deepesh Sonar · AI Systems · Research · Software Engineering</div>
-      <div className="w-full max-w-[440px] grid gap-4 md:grid-cols-2 justify-items-center md:justify-items-stretch">
+      <div className="text-[12.5px] md:text-[14px] mt-2 md:mt-3 mb-1" style={{ color: "var(--muted)" }}>{profile.tagline}</div>
+      <div className="text-[11px] md:text-[12px] mb-3 md:mb-4" style={{ color: "var(--faint)" }}>Deepesh Sonar · AI Systems · Research · Software Engineering</div>
+      <div className="w-full max-w-[440px] md:max-w-[560px] grid gap-4 md:gap-5 md:grid-cols-2 justify-items-center md:justify-items-stretch">
         <div role="list" aria-label="quick actions" className="w-full max-w-[300px] md:max-w-none">
           {ACTIONS.map((a) => (
             <button key={a.key} role="listitem" onClick={() => { sound.select(); a.run(); }}
-              className="w-full flex items-center gap-3 px-3 py-[5px] text-[13px] text-left hover:bg-[var(--sel-bg)]">
-              <span className="w-6 text-center text-[12px]" style={{ color: "var(--icy)" }}>{a.key}</span>
+              className="w-full flex items-center gap-3 px-3 py-[5px] md:py-[7px] text-[13px] md:text-[14px] text-left hover:bg-[var(--sel-bg)]">
+              <span className="w-6 text-center text-[12px] md:text-[13px]" style={{ color: "var(--icy)" }}>{a.key}</span>
               <span style={{ color: "var(--fg-dim)" }}>{a.label}</span>
             </button>
           ))}
@@ -245,7 +245,7 @@ export function HomeView() {
           <div className="text-[10.5px] uppercase tracking-[0.16em] px-3 mb-1" style={{ color: "var(--muted)" }}>recent</div>
           {recentShown.map((r) => (
             <button key={r} onClick={() => { const n = findNode(r); if (n) { sound.fileOpen(); openFile(r, n.kind); } }}
-              className="w-full text-left px-3 py-[3px] text-[12px] truncate hover:bg-[var(--sel-bg)]" style={{ color: "var(--fg-dim)" }}>
+              className="w-full text-left px-3 py-[3px] md:py-[5px] text-[12px] md:text-[13px] truncate hover:bg-[var(--sel-bg)]" style={{ color: "var(--fg-dim)" }}>
               <span style={{ color: "var(--muted)" }}>· </span>{shortPath(r)}
             </button>
           ))}
@@ -257,7 +257,7 @@ export function HomeView() {
         </div>
         <MiniCalendar />
       </div>
-      <div className="w-full max-w-2xl mt-2 flex flex-col items-center">
+      <div className="w-full max-w-2xl md:max-w-3xl mt-2 md:mt-3 flex flex-col items-center">
         <AchievementsStrip />
       </div>
       </div>
@@ -275,11 +275,11 @@ export function AchievementsStrip() {
       <div className="flex gap-4 overflow-x-auto justify-center px-2 ach-strip" role="list" aria-label="github achievements">
         {achievements.map((a) => (
           <div key={a.slug} role="listitem" title={`${a.name}${a.tier ? ` ${a.tier}` : ""} — ${a.meaning}`}
-            className="flex flex-col items-center gap-1 shrink-0 w-[84px] ach-item">
+            className="flex flex-col items-center gap-1 shrink-0 w-[84px] md:w-[104px] ach-item">
             <img src={a.img} alt={`${a.name} achievement badge`} width={44} height={44}
-              className="rounded-full select-none" draggable={false}
+              className="rounded-full select-none md:w-[56px] md:h-[56px]" draggable={false}
               style={{ border: "1px solid var(--border)" }} />
-            <div className="text-[10.5px] text-center leading-tight" style={{ color: "var(--fg-dim)" }}>
+            <div className="text-[10.5px] md:text-[11.5px] text-center leading-tight" style={{ color: "var(--fg-dim)" }}>
               {a.name}{a.tier ? ` ${a.tier}` : ""}
             </div>
           </div>

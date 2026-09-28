@@ -21,14 +21,14 @@ async function call<T>(body: unknown): Promise<T> {
   return (await res.json()) as T;
 }
 
-export async function submitScore(score: number): Promise<void> {
+export async function submitScore(score: number, member?: string): Promise<void> {
   if (!leaderboardOn()) return;
   const s = Math.max(0, Math.min(MAX_SCORE, Math.floor(score)));
-  const member = (typeof crypto !== "undefined" && "randomUUID" in crypto
+  const id = member ?? (typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
   await call([
-    ["ZADD", KEY, s, member],
+    ["ZADD", KEY, s, id],
     // keep only the best: trim everything past the top N
     ["ZREMRANGE", KEY, 0, -(MAX_ENTRIES + 1)],
   ]);

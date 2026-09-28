@@ -142,6 +142,10 @@ export function Constellation() {
   const hoverRef = useRef<string | null>(null);
   const selRef = useRef<string | null>(null);
   const pinsRef = useRef<string[]>([]);
+  // dotted backdrop, rebuilt when size/theme changes (screen-space grid:
+  // the dots stay put while the graph pans/zooms above them).
+  const dotPatRef = useRef<CanvasPattern | null>(null);
+  const dotKeyRef = useRef("");
   hoverRef.current = hover;
   selRef.current = sel;
   pinsRef.current = pins;
@@ -504,6 +508,31 @@ export function Constellation() {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.fillStyle = theme.bg;
       ctx.fillRect(0, 0, W, H);
+      {
+        // tile is built in CSS px; the dpr transform scales it to devices.
+        const key = theme.bg;
+        if (!dotPatRef.current || dotKeyRef.current !== key) {
+          dotKeyRef.current = key;
+          const gap = 26, tile = document.createElement("canvas");
+          tile.width = gap;
+          tile.height = gap;
+          const pc = tile.getContext("2d");
+          if (pc) {
+            // accent-tinted dots: visible against the paper bg, in the
+            // site's own color (border-tinted dots vanished into the bg).
+            pc.fillStyle = theme.accent;
+            pc.globalAlpha = 0.32;
+            pc.beginPath();
+            pc.arc(gap / 2, gap / 2, 1.4, 0, Math.PI * 2);
+            pc.fill();
+          }
+          dotPatRef.current = ctx.createPattern(tile, "repeat");
+        }
+        if (dotPatRef.current) {
+          ctx.fillStyle = dotPatRef.current;
+          ctx.fillRect(0, 0, W, H);
+        }
+      }
       const hov = hoverRef.current, s = selRef.current;
       const focus = hov ?? s;
       const linked = new Set<string>();
@@ -533,7 +562,7 @@ export function Constellation() {
         const on = !hov && !s && path.size === 0 ? true : linked.has(a.id) && linked.has(b.id);
         ctx.globalAlpha = inPath ? 1 : on ? 1 : 0.15;
         ctx.strokeStyle = inPath ? theme.accent : theme.edge;
-        ctx.lineWidth = inPath ? 2.2 : 1.6;
+        ctx.lineWidth = inPath ? 2.4 : 2;
         ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
       }
       ctx.globalAlpha = 1;

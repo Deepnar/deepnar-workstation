@@ -295,7 +295,7 @@ function Browser() {
             {nodes.length === 0 && <div className="px-3 py-4 text-[12px]" style={{ color: "var(--muted)" }}>empty directory</div>}
           </div>
         </Panel>
-        <Separator className="w-[5px] cursor-col-resize shrink-0 hover:bg-[var(--sel-bg)]" aria-label="resize list and preview" />
+        <Separator className="w-[5px] cursor-col-resize shrink-0 hover:bg-[var(--border)] focus:outline-none focus-visible:outline-none" aria-label="resize list and preview" />
         <Panel id="preview" defaultSize="45" minSize="25">
           <div className="h-full overflow-auto min-h-0 border-l" style={{ borderColor: "var(--border)" }}>
             {preview ? <PreviewPane path={preview} /> : <div className="p-4 text-[12px]" style={{ color: "var(--muted)" }}>select a file to preview</div>}
@@ -607,7 +607,6 @@ export function Workstation() {
               <Explorer />
             </div>
           </Panel>
-          <Separator className="w-[5px] cursor-col-resize shrink-0 hover:bg-[var(--sel-bg)]" aria-label="resize explorer" />
           <Panel id="main" defaultSize="56" minSize="30">
             <div className="h-full flex flex-col min-h-0">
               <main id="main" className="flex-1 min-h-0 min-w-0 overflow-auto" aria-label="workspace">
@@ -617,7 +616,7 @@ export function Workstation() {
           </Panel>
           {dockVisible && (
             <>
-              <Separator className="w-[5px] cursor-col-resize shrink-0 hover:bg-[var(--sel-bg)]" aria-label="resize utility dock" />
+              <Separator className="w-[5px] cursor-col-resize shrink-0 hover:bg-[var(--border)] focus:outline-none focus-visible:outline-none" aria-label="resize utility dock" />
               <Panel id="dock" defaultSize="25" minSize="18" maxSize="55">
                 <Dock />
               </Panel>

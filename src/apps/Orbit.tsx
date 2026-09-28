@@ -97,6 +97,8 @@ export function Orbit() {
   const bestRef = useRef(0);
   const submittedScoreRef = useRef(0);
   const lastSubmitRef = useRef(0);
+  // one board row per run: live ticks UPDATE it instead of littering rows.
+  const runMemberRef = useRef<string>(`${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const bankBest = (score: number) => {
     if (score <= bestRef.current) return;
     bestRef.current = score;
@@ -107,7 +109,7 @@ export function Orbit() {
     if (leaderboardOn() && score > submittedScoreRef.current && Date.now() - lastSubmitRef.current > 15000) {
       lastSubmitRef.current = Date.now();
       submittedScoreRef.current = score;
-      submitScore(score)
+      submitScore(score, runMemberRef.current)
         .then(() => topScores(5).then(setTop).catch(() => {}))
         .catch(() => {});
     }
@@ -116,6 +118,7 @@ export function Orbit() {
     bodies: [] as Body[], particles: [] as Particle[], pops: [] as Pop[], rings: [] as Ring[],
     px: 0, py: 0, vx: 0, vy: 0, angle: -Math.PI / 2, keys: new Set<string>(),
     score: 0, lives: 5, invuln: 0, alive: true, shake: 0, thrusting: false, braking: false, countdown: 3,
+    sfx: 0, sfy: 0,
   });
 
   useEffect(() => {
@@ -134,8 +137,9 @@ export function Orbit() {
     const ctx = cv.getContext("2d");
     if (!ctx) return;
     const st = stateRef.current;
-    const W = (cv.width = cv.clientWidth * 2);
-    const H = (cv.height = cv.clientHeight * 2);
+    // mutable: rotation/resize rescales the world into the new box (below).
+    let W = (cv.width = cv.clientWidth * 2);
+    let H = (cv.height = cv.clientHeight * 2);
     st.px = W / 2;
     st.py = H / 2;
     st.bodies = [];
@@ -156,6 +160,11 @@ export function Orbit() {
     setCount(3);
     submittedScoreRef.current = 0;
     lastSubmitRef.current = 0;
+    try {
+      runMemberRef.current = crypto.randomUUID();
+    } catch {
+      runMemberRef.current = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    }
     if (leaderboardOn()) topScores(5).then(setTop).catch(() => {});
 
     const spawn = () => {
@@ -277,7 +286,7 @@ export function Orbit() {
                 // final catch-up: bank whatever the live throttle hasn't yet
                 if (leaderboardOn() && st.score > submittedScoreRef.current) {
                   submittedScoreRef.current = st.score;
-                  submitScore(st.score)
+                  submitScore(st.score, runMemberRef.current)
                     .then(() => topScores(5).then(setTop).catch(() => {}))
                     .catch(() => {});
                 }
@@ -298,17 +307,25 @@ export function Orbit() {
       if (st.shake > 0) st.shake = Math.max(0, st.shake - dt / 16);
 
       // draw (screen shake on rock hits: tiny, decaying)
-      const dark = document.documentElement.dataset.theme !== "light";
+      // space is always night: the game renders its dark arena even when
+      // the site shell is in light mode.
+      const dark = true;
       ctx.save();
       if (st.shake > 0) ctx.translate((Math.random() - 0.5) * st.shake, (Math.random() - 0.5) * st.shake);
       ctx.fillStyle = dark ? "#0d0f14" : "#f4f2ec";
       ctx.fillRect(-12, -12, W + 24, H + 24);
-      // starfield
-      ctx.fillStyle = dark ? "#c9d1e3" : "#2a2d3a";
-      for (let i = 0; i < 40; i++) {
-        const sx = (i * 173) % W, sy = (i * 311) % H;
-        ctx.globalAlpha = 0.25 + ((i * 7) % 10) / 20;
-        ctx.fillRect(sx, sy, 2, 2);
+      // starfield: two parallax layers drift against the ship's velocity
+      // (plus a slow ambient drift), so flight reads as moving through space.
+      ctx.fillStyle = "#c9d1e3";
+      st.sfx = (((st.sfx + st.vx * 0.35 + 0.3) % W) + W) % W;
+      st.sfy = (((st.sfy + st.vy * 0.35 + 0.18) % H) + H) % H;
+      for (let i = 0; i < 48; i++) {
+        const layer = i < 20 ? 0.2 : 0.45;
+        const sx = (((i * 173 - st.sfx * layer) % W) + W) % W;
+        const sy = (((i * 311 - st.sfy * layer) % H) + H) % H;
+        ctx.globalAlpha = (i < 20 ? 0.2 : 0.35) + ((i * 7) % 10) / 28;
+        const sz = i < 20 ? 2 : 3;
+        ctx.fillRect(sx, sy, sz, sz);
       }
       ctx.globalAlpha = 1;
       // bodies
@@ -413,16 +430,32 @@ export function Orbit() {
     };
     cv.addEventListener("touchmove", touch, { passive: true });
 
-    // orientation/resize: keep the backing store matched to the real box.
-    // steady-state rendering is unchanged; this only corrects stale sizes.
+    // orientation/resize: keep the backing store matched to the real box AND
+    // rescale the live world into it — without this the ship/bodies stay in
+    // the old pixel space and the field looks cut until a restart.
     let ro: ResizeObserver | null = null;
     try {
       ro = new ResizeObserver(() => {
         const w = Math.floor(cv.clientWidth * 2), h = Math.floor(cv.clientHeight * 2);
         if (w > 10 && h > 10 && (cv.width !== w || cv.height !== h)) {
+          const ow = W, oh = H;
           cv.width = w; cv.height = h;
-          st.px = Math.min(Math.max(st.px, 0), w);
-          st.py = Math.min(Math.max(st.py, 0), h);
+          W = w; H = h;
+          const sx = w / Math.max(1, ow), sy = h / Math.max(1, oh);
+          if (ow > 10 && oh > 10 && (Math.abs(sx - 1) > 0.02 || Math.abs(sy - 1) > 0.02)) {
+            const cl = (v: number, m: number) => Math.min(Math.max(v, 0), m);
+            st.px = cl(st.px * sx, w); st.py = cl(st.py * sy, h);
+            st.sfx = 0; st.sfy = 0;
+            for (const b of st.bodies) {
+              if (b.x > -9000) { b.x *= sx; b.y *= sy; b.vx *= sx; b.vy *= sy; }
+            }
+            for (const p of st.particles) { p.x *= sx; p.y *= sy; }
+            for (const q of st.pops) { q.x *= sx; q.y *= sy; }
+            for (const r of st.rings) { r.x *= sx; r.y *= sy; }
+          } else {
+            st.px = Math.min(Math.max(st.px, 0), w);
+            st.py = Math.min(Math.max(st.py, 0), h);
+          }
         }
       });
       ro.observe(cv);

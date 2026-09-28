@@ -212,7 +212,7 @@ export function AppWindow() {
   return (
     <div className="fixed inset-0 z-40 flex flex-col overflow-hidden pt-9 cursor-theme" style={{ background: "var(--bg)" }}>
       <div className="relative flex-1 flex flex-col min-h-0 app-open m-3 sm:m-6">
-        <div className="flex flex-col flex-1 min-h-0 border overflow-hidden" style={{ borderColor: "var(--app-border)", background: "var(--bg)", borderRadius: 10 }}>
+        <div className="flex flex-col flex-1 min-h-0 border overflow-hidden shadow-[0_24px_70px_rgba(20,18,14,0.35),0_4px_18px_rgba(20,18,14,0.22)]" style={{ borderColor: "var(--app-border)", background: "var(--bg)", borderRadius: 10 }}>
           <div className="flex-1 min-h-0 flex flex-col relative">
             {desktopWs === 1 ? <Workstation /> : desktopWs === 2 ? <Orbit /> : <Constellation />}
           </div>
