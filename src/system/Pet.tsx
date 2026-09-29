@@ -228,6 +228,29 @@ export function Pet({ anchor }: { anchor: "desktop" | "status" }) {
   const dragTrail = useRef<{ x: number; y: number; t: number }[]>([]);
   const quipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wokeRef = useRef(false);
+  const arrivedRef = useRef(false);
+  // arrival tour: fires on the FIRST wake inside the app (user activity or
+  // the entry timer, whichever comes first) — every page load, not random.
+  const arrive = () => {
+    if (arrivedRef.current || document.hidden) return;
+    const s = useShell.getState();
+    if (s.phase !== "app") return; // still on boot — a later wake delivers
+    arrivedRef.current = true;
+    if (s.petMode === "sleep") s.setPetMode("idle");
+    // double hop for attention, then a long-lived pointer at a section.
+    // stamps lastChatter so route chatter doesn't talk over it (retries
+    // still deliver those after).
+    if (actRef.current === "none") {
+      setAct("hop"); hold(1100);
+      setPos((p) => ({ ...p, y: -14 }));
+      setTimeout(() => setPos((p) => ({ ...p, y: 0 })), 400);
+      setTimeout(() => setPos((p) => ({ ...p, y: -14 })), 550);
+      setTimeout(() => { setPos((p) => ({ ...p, y: 0 })); if (actRef.current === "hop") setAct("none"); }, 950);
+    }
+    lastChatter.current = Date.now();
+    say(prySay("tour"), 6500);
+    window.dispatchEvent(new Event("pry-awake"));
+  };
   const pokeTimes = useRef<number[]>([]);
   const dragTimes = useRef<number[]>([]);
   // pry remarks on navigation: one unique line per thing opened.
@@ -332,7 +355,8 @@ export function Pet({ anchor }: { anchor: "desktop" | "status" }) {
     const wake = () => {
       idleRef.current = Date.now();
       const s = useShell.getState();
-      if (s.petMode === "sleep") { s.setPetMode("idle"); say(Math.random() < 0.3 ? prySay("greetings") : "..."); }
+      if (s.petMode === "sleep") s.setPetMode("idle");
+      arrive();
     };
     window.addEventListener("mousemove", wake, { passive: true });
     window.addEventListener("keydown", wake);
@@ -356,12 +380,9 @@ export function Pet({ anchor }: { anchor: "desktop" | "status" }) {
     const s = useShell.getState();
     if (s.petMode === "idle") s.setPetMode("sleep");
     const t = setTimeout(() => {
-      const st = useShell.getState();
-      if (st.petMode === "sleep" && !document.hidden) {
-        st.setPetMode("idle");
-        say(prySay("wakeUp"));
-        window.dispatchEvent(new Event("pry-awake"));
-      }
+      // entry timer: backstop for the arrival tour in case no user activity
+      // wakes pry first (wake() calls arrive() too — arrivedRef dedupes).
+      arrive();
     }, 2400);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps

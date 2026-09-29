@@ -11,7 +11,7 @@ export type PryPool =
   | "internetCulture" | "nonsense" | "food" | "observations" | "interaction"
   | "dragged" | "dropped" | "dizzy" | "annoyed" | "happy" | "achievement"
   | "error" | "terminal" | "agent" | "signal" | "orbit" | "resume" | "goodbye"
-  | "cursorNear" | "cursorCircle";
+  | "cursorNear" | "cursorCircle" | "tour";
 
 const P: Record<PryPool, string[]> = {
   greetings: [
@@ -39,7 +39,28 @@ const P: Record<PryPool, string[]> = {
     "i'm literally just a little guy.", "nothing happened. i just wanted the bubble.",
     "this could have been an email.", "skill issue.", "sounds like a tomorrow problem.",
     "i require no context.", "huge if true.", "many are saying this.",
+  ],
+  // arrival tour: said on EVERY page load (not random) with a hop, so
+  // first-time visitors get pointed at a section even if they miss the hint.
+  tour: [
     "new here? start with projects or about.",
+    "new here? press p. projects live there.",
+    "i think u should press p for projects.",
+    "p is for projects. start there.",
+    "projects first. trust the cat.",
+    "press a for about. that's the human.",
+    "a is about. deepesh, summarized.",
+    "curious about the human? press a.",
+    "r goes to research. the serious stuff.",
+    "press r for research papers and such.",
+    "research lives under r. obviously.",
+    "o is open source. merged stuff inside.",
+    "press o. other people's repos, fixed.",
+    "o for open source. he contributes there.",
+    "c is contact. he actually replies.",
+    "press c to reach the human.",
+    "f finds any file. try it.",
+    "lost? press f and type.",
   ],
   sleepy: [
     "so sleepy.", "is it nap o'clock.", "just resting my render loop.",
