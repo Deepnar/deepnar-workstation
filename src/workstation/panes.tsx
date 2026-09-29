@@ -254,7 +254,7 @@ export function HomeView() {
   const recentShown = (recent.length > 0 ? recent : [`${HOME}/projects/ice/README.md`, `${HOME}/research/lsrep-ice/README.md`, `${HOME}/oss/merged/mne-python-14283.md`]).slice(0, 5);
   return (
     <div className="h-full overflow-auto px-6 py-5 home-root">
-      <div className="min-h-full flex flex-col items-center justify-center">
+      <div className="min-h-full flex flex-col items-center justify-center home-col">
       <BlockLogo />
       <div className="text-[12.5px] md:text-[14px] mt-2 md:mt-3 mb-1" style={{ color: "var(--muted)" }}>{profile.tagline}</div>
       {newHint && (

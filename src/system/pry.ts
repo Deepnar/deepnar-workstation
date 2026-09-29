@@ -39,6 +39,7 @@ const P: Record<PryPool, string[]> = {
     "i'm literally just a little guy.", "nothing happened. i just wanted the bubble.",
     "this could have been an email.", "skill issue.", "sounds like a tomorrow problem.",
     "i require no context.", "huge if true.", "many are saying this.",
+    "new here? start with projects or about.",
   ],
   sleepy: [
     "so sleepy.", "is it nap o'clock.", "just resting my render loop.",
