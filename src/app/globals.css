@@ -346,9 +346,10 @@ html[data-motion="off"] *::after {
   /* first-visit hint stays one tight line on phones */
   .home-root .home-hint { margin-top: -2px !important; margin-bottom: 3px !important; line-height: 1.25 !important; white-space: nowrap !important; }
 }
-/* short viewports of any width keep the hard-won no-scroll home: the
-   first-visit hint yields, everything else stays put */
-@media (max-height: 740px) {
+/* short PHONE viewports keep the hard-won no-scroll home: the first-visit
+   hint yields, everything else stays put. desktop keeps the hint at any
+   height — it scrolls there anyway. */
+@media (max-height: 740px) and (max-width: 639px) {
   .home-root .home-hint { display: none !important; }
 }
 /* first-visit hint gleam: a soft indigo wash sweeps left to right, then
