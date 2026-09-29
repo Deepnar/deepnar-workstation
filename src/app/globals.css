@@ -326,6 +326,8 @@ html[data-motion="off"] *::after {
   #main { overflow-x: clip; }
   .home-root { padding-top: 6px !important; padding-bottom: 6px !important; }
   .home-root .home-logo { max-width: 170px !important; }
+  /* logo card keeps breathing room but stays compact on phones */
+  .home-root .home-logo-card { padding: 10px 12px 8px !important; }
   .home-root .grid.gap-4 { gap: 6px !important; }
   .home-root .mb-3 { margin-bottom: 6px !important; }
   .home-root .mt-3, .home-root .mt-2 { margin-top: 4px !important; }
@@ -341,4 +343,35 @@ html[data-motion="off"] *::after {
   /* hover readout + yearly total need hover; on touch the graph speaks for
      itself — hiding buys 20px toward the no-scroll budget */
   .home-root .cal-count { display: none !important; }
+  /* first-visit hint stays one tight line on phones */
+  .home-root .home-hint { margin-top: -2px !important; margin-bottom: 3px !important; line-height: 1.25 !important; white-space: nowrap !important; }
+}
+/* short viewports of any width keep the hard-won no-scroll home: the
+   first-visit hint yields, everything else stays put */
+@media (max-height: 740px) {
+  .home-root .home-hint { display: none !important; }
+}
+/* first-visit hint gleam: a soft indigo wash sweeps left to right, then
+   rests. transform-only (compositor-driven, linear — no easing stalls,
+   no half-parked frames), off under reduced motion. */
+.home-hint { position: relative; overflow: hidden; padding: 0 10px; margin: 0 -10px; }
+.home-hint::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, rgba(78, 87, 184, 0) 43%, rgba(139, 147, 232, 0.65) 50%, rgba(78, 87, 184, 0) 57%, transparent 70%);
+  /* feather the wash layer's own left/right edges so the slanted band
+     can never end in a hard vertical cut at the line's ends */
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, black 4%, black 96%, transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0, black 4%, black 96%, transparent 100%);
+  transform: translateX(-130%);
+  animation: hint-sweep 4.5s linear infinite;
+  pointer-events: none;
+}
+@keyframes hint-sweep {
+  0% { transform: translateX(-130%); }
+  50%, 100% { transform: translateX(130%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-hint::after { animation: none; display: none; }
 }

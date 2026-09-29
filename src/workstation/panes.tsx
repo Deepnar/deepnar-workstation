@@ -202,6 +202,9 @@ export function MiniCalendar() {
 }
 
 /* ── home: lazyvim dashboard ── */
+// per-load guard: remounts in the same page load (phase changes,
+// StrictMode) must not consume extra hint views — one count per reload.
+let hintCountedThisLoad = false;
 const ACTIONS: { key: string; label: string; run: () => void }[] = [
   { key: "f", label: "Find file", run: () => useShell.getState().toggle("paletteOpen") },
   { key: "a", label: "About", run: () => useShell.getState().navTo(`${HOME}/about`) },
@@ -216,21 +219,52 @@ const ACTIONS: { key: string; label: string; run: () => void }[] = [
 // 4-wide pixel glyphs, 2-space gaps — every row exactly 40 cells
 function BlockLogo() {
   return (
-    <img src="/deepnar-wordmark.png" alt="DEEPNAR" width={520} height={191}
-      className="w-full max-w-[440px] md:max-w-[560px] h-auto select-none home-logo" draggable={false}
-      style={{ borderRadius: 10, border: "1px solid var(--border)" }} />
+    <div className="w-full max-w-[440px] md:max-w-[560px] home-logo-card" style={{ borderRadius: 10, border: "2px solid #454441", padding: "16px 20px 14px" }}>
+      <img src="/deepnar-identity.png" alt="DEEPNAR — Deepesh Sonar · AI Systems · Research · Software Engineering" width={520} height={191}
+        className="w-full h-auto select-none home-logo" draggable={false} />
+    </div>
   );
 }
 
 export function HomeView() {
   const { recent, openFile } = useShell();
+  // first-visit hint: first 8 Home views (localStorage counter), so an
+  // accidental reload or a quickly-closed tab doesn't eat the only showing.
+  // v2 key: resets the count once so exhausted dev counters start over.
+  const [newHint, setNewHint] = useState(() => {
+    try {
+      let n = Number(localStorage.getItem("deepnar-hint-views-v2") ?? 0);
+      if (!hintCountedThisLoad) {
+        hintCountedThisLoad = true;
+        n += 1;
+        localStorage.setItem("deepnar-hint-views-v2", String(n));
+      }
+      return n <= 8;
+    } catch { return true; }
+  });
+  useEffect(() => {
+    // the hint yields when it alone causes overflow: measure with it
+    // rendered; if the page scrolls by no more than the hint's own
+    // height, hiding the hint restores a clean fit.
+    try {
+      const home = document.querySelector(".home-root");
+      if (home && home.scrollHeight > home.clientHeight && home.scrollHeight - home.clientHeight <= 26) setNewHint(false);
+    } catch { /* measure failed: keep the hint */ }
+  }, []);
   const recentShown = (recent.length > 0 ? recent : [`${HOME}/projects/ice/README.md`, `${HOME}/research/lsrep-ice/README.md`, `${HOME}/oss/merged/mne-python-14283.md`]).slice(0, 5);
   return (
     <div className="h-full overflow-auto px-6 py-5 home-root">
       <div className="min-h-full flex flex-col items-center justify-center">
       <BlockLogo />
       <div className="text-[12.5px] md:text-[14px] mt-2 md:mt-3 mb-1" style={{ color: "var(--muted)" }}>{profile.tagline}</div>
-      <div className="text-[11px] md:text-[12px] mb-3 md:mb-4" style={{ color: "var(--faint)" }}>Deepesh Sonar · AI Systems · Research · Software Engineering</div>
+      {newHint && (
+        <div className="text-[11px] md:text-[12px] -mt-1 mb-2 home-hint" style={{ color: "var(--faint)" }}>
+          <span>new here? start with{" "}</span>
+          <button onClick={() => { sound.select(); useShell.getState().navTo(`${HOME}/projects`); }} className="hover:underline" style={{ color: "#505ff2" }}>projects</button>
+          {" "}or{" "}
+          <button onClick={() => { sound.select(); useShell.getState().navTo(`${HOME}/about`); }} className="hover:underline" style={{ color: "#505ff2" }}>about</button>
+        </div>
+      )}
       <div className="w-full max-w-[440px] md:max-w-[560px] grid gap-4 md:gap-5 md:grid-cols-2 justify-items-center md:justify-items-stretch">
         <div role="list" aria-label="quick actions" className="w-full max-w-[300px] md:max-w-none">
           {ACTIONS.map((a) => (
