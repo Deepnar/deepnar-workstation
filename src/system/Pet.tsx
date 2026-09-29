@@ -277,6 +277,10 @@ export function Pet({ anchor }: { anchor: "desktop" | "status" }) {
       // locations observed inside the app, so entering with a deep link
       // still greets the thing once the workstation is up.
       if (s.phase !== "app") return;
+      // entry: the moment the workstation comes up, the arrival tour fires
+      // (covers fresh visitors behind the welcome overlay, where the entry
+      // timer already ran during boot). consumes the key.
+      if (!arrivedRef.current) { locRef.current = key; arrive(); return; }
       // homecoming: landed back on the dashboard after the arrival tour →
       // a short (2.8s) tour pointer. consumes the key (home has no
       // open-line of its own on ws1). 25s floor so rapid tab flicker
