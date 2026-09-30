@@ -34,6 +34,7 @@ export const aboutReadme: string[] = [
   `· scholar — LSREP preprint (arxiv 2609.16730)`,
   `· linkedin, orcid, x — see contact.json`,
   `· detailed record — [[/home/deepnar/about/notable.md|notable.md]] (every claim below links its evidence)`,
+  `· resume — [[/home/deepnar/about/resume.pdf|resume.pdf]] (two pages, general research/systems version)`,
 ];
 
 /** one notable entry: anchor id, heading, body lines (may contain [[path|label]] links) */

@@ -35,7 +35,7 @@ const ENTITY_PATH: Record<string, string> = {
   about: `${HOME}/about/README.md`,
   projects: `${HOME}/projects`,
   practice: `${HOME}/projects/practice`,
-  resume: `${HOME}/resume.pdf`,
+  resume: `${HOME}/about/resume.pdf`,
 };
 
 export function runAgentAction(run: string, ask: (q: string) => void) {

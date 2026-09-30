@@ -91,7 +91,8 @@ export default function Page() {
         if (st.activeBuffer || (st.activeDock && !typing)) {
           e.preventDefault();
           e.stopPropagation();
-          if (st.activeBuffer) { sound.fileClose(); st.closeBuffer(st.activeBuffer); }
+          if (st.activeTab && st.activeBuffer === HOME && st.activeDock && !typing) { sound.fileClose(); st.closeDock(st.activeDock); }
+          else if (st.activeTab) { sound.fileClose(); st.closeBuffer(st.activeTab); }
           else if (st.activeDock) { sound.fileClose(); st.closeDock(st.activeDock); }
           return;
         }
@@ -108,8 +109,8 @@ export default function Page() {
       if (e.altKey && e.key.toLowerCase() === "w") {
         e.preventDefault();
         ensureApp();
-        if (s.mainView === "buffer" && s.activeBuffer) {
-          s.closeBuffer(s.activeBuffer);
+        if (s.mainView === "buffer" && s.activeTab) {
+          s.closeBuffer(s.activeTab);
           sound.fileClose();
         }
         return;

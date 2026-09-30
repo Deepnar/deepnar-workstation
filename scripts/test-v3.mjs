@@ -132,15 +132,19 @@ await page.getByRole("button", { name: "forward" }).click();
 await page.waitForTimeout(300);
 check("forward → ice", (await page.getByLabel("file navigation").innerText()).includes("~/projects/ice"));
 
-// 9. middle-click closes buffer
-const tabs = page.getByRole("tablist", { name: "buffers" }).getByRole("tab");
-const nTabs = await tabs.count();
-if (nTabs >= 1) {
-  const box = await tabs.first().boundingBox();
-  if (box) await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2, { button: "middle" });
-  await page.waitForTimeout(300);
-  check("middle-click closes buffer", (await tabs.count()) === nTabs - 1);
-} else check("middle-click closes buffer (no tabs)", true);
+// 9. middle-click closes buffer; the bar never empties — last close → home
+await page.goto("http://127.0.0.1:3001/?open=~/about/README.md", { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(2500);
+const tabs9 = page.getByRole("tablist", { name: "buffers" }).getByRole("tab");
+check("9 two tabs (home + file)", await tabs9.count() === 2);
+const box9 = await tabs9.first().boundingBox();
+if (box9) await page.mouse.click(box9.x + box9.width / 2, box9.y + box9.height / 2, { button: "middle" });
+await page.waitForTimeout(300);
+check("9 middle-click closes home tab", await tabs9.count() === 1);
+const last9 = await tabs9.first().boundingBox();
+if (last9) await page.mouse.click(last9.x + last9.width / 2, last9.y + last9.height / 2, { button: "middle" });
+await page.waitForTimeout(300);
+check("9 last close → home tab", await tabs9.count() === 1 && await page.getByRole("tab", { name: "home", selected: true }).count() === 1);
 
 // 10. explorer: no drag handle — button-only toggle, layout persists
 check("no explorer drag handle", (await page.getByLabel("resize explorer").count()) === 0);
@@ -217,6 +221,11 @@ const dl = page.waitForEvent("download", { timeout: 5000 }).catch(() => null);
 await page.getByRole("link", { name: /download/i }).click();
 check("evidence download works", (await dl) !== null);
 
+// 13b. resume lives in ~/about (master PDF from the CV folder)
+await page.goto("http://127.0.0.1:3001/?open=~/about/resume.pdf", { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(1500);
+check("resume.pdf opens in a tab", await page.getByRole("tab", { name: "resume.pdf", selected: true }).count() >= 1);
+
 // 14. research: artifacts + real arxiv action (deep-link the READMEs directly)
 await page.goto("http://127.0.0.1:3001/?open=~/research/lsrep-ice/README.md", { waitUntil: "domcontentloaded" });
 await page.waitForTimeout(1500);
@@ -237,7 +246,7 @@ check("no now.md", noNow === 0);
 await page.getByTitle("home").click();
 await page.waitForTimeout(500);
 const homeText = await page.locator("main").innerText();
-check("home shows wordmark", await page.locator("main").locator("img[alt='DEEPNAR']").count() >= 1);
+check("home shows wordmark", await page.locator("main").locator("img[alt*='DEEPNAR']").count() >= 1);
 check("home shows activity total", /in the last year/.test(homeText));
 const miniCells = await page.locator("main").locator("div[title*='contribution']").count();
 check("mini calendar has recent weeks", miniCells > 300 && miniCells < 400);
@@ -308,8 +317,8 @@ check("21d no stale buffer", !(await page.locator("main").innerText()).includes(
 await page.getByRole("listbox").getByText("timetable-generator/", { exact: true }).click();
 await page.waitForTimeout(400);
 check("21e browse timetable", (await page.getByLabel("file navigation").innerText()).includes("timetable-generator"));
-// click README tab → old ICE README back
-await page.getByRole("tablist", { name: "buffers" }).getByRole("tab").first().click();
+// click ice README tab → old ICE README back (first tab may be home now)
+await page.getByRole("tablist", { name: "buffers" }).getByRole("tab", { name: "README" }).first().click();
 await page.waitForTimeout(400);
 check("21f tab restores buffer", (await page.locator("main").innerText()).includes("Infinite Context Engine"));
 // finder → ~/research → browse research
@@ -471,18 +480,24 @@ check("34 home tab", await page.getByRole("tab", { name: "home" }).count() >= 1)
 await page.keyboard.press("p");
 await page.waitForTimeout(500);
 check("34b home-tab p works", (await page.getByLabel("file navigation").innerText()).includes("projects"));
-// 34c. shift+tab cycles buffer tabs forward
-await page.keyboard.press("v");
-await page.waitForTimeout(500);
+// 34c. shift+tab cycles buffer tabs (deterministic 2-tab state via deep link)
+await page.goto("http://127.0.0.1:3001/?open=~/about/README.md", { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(2500);
+check("34c two tabs", await page.getByRole("tablist", { name: "buffers" }).getByRole("tab").count() === 2);
 await page.keyboard.press("Shift+Tab");
 await page.waitForTimeout(400);
 check("34c shift+tab cycles", await page.getByRole("tab", { name: "home", selected: true }).count() >= 1);
-// 34d. alt+w closes the active tab
-await page.keyboard.press("Alt+t");
+// 34d. alt+w closes the file tab back onto home; alt+t keeps home active
+await page.keyboard.press("Shift+Tab");
 await page.waitForTimeout(400);
 await page.keyboard.press("Alt+w");
 await page.waitForTimeout(400);
-check("34d alt+w closes tab", await page.getByRole("tab", { name: "home", selected: true }).count() === 0);
+check("34d alt+w closes tab", await page.getByRole("tab", { name: "home", selected: true }).count() >= 1
+  && await page.getByRole("tablist", { name: "buffers" }).getByRole("tab").count() === 1);
+await page.keyboard.press("Alt+t");
+await page.waitForTimeout(400);
+check("34d alt+t home tab", await page.getByRole("tab", { name: "home", selected: true }).count() >= 1);
+check("34d alt+t mints fresh tab", await page.getByRole("tablist", { name: "buffers" }).getByRole("tab").count() === 2);
 
 // 35. left from a top-level section lands on the ~ listing
 await page.keyboard.press("p");

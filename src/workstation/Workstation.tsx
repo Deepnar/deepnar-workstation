@@ -28,7 +28,7 @@ function Header() {
       <NavBtn title="back" onClick={() => { navBack(); focusList(); }}><ArrowLeft size={15} /></NavBtn>
       <NavBtn title="forward" onClick={() => { navFwd(); focusList(); }}><ArrowRight size={15} /></NavBtn>
       <NavBtn title="parent" onClick={() => { navUp(); sound.tick(-1); focusList(); }}><ArrowUp size={15} /></NavBtn>
-      <NavBtn title="home" onClick={() => { navTo(HOME); sound.nav(); focusList(); }}><Home size={15} /></NavBtn>
+      <NavBtn title="home" onClick={() => { useShell.getState().goHome(); sound.nav(); focusList(); }}><Home size={15} /></NavBtn>
       <span className="ml-1 truncate text-[12px]" style={{ color: "var(--icy)" }}>{shortPath(cwd)}</span>
       <span className="flex-1" />
       <button className={btn} title="search (ctrl+k)" aria-label="search" onClick={() => { sound.palette(); toggle("paletteOpen"); }}>
@@ -68,7 +68,7 @@ function TabNav({ explorerRef, small, drawerOpen, onToggleDrawer }: {
   drawerOpen: boolean;
   onToggleDrawer: () => void;
 }) {
-  const { dockVisible, setDockVisible, openBuffers, activeBuffer, openFile, closeBuffer } = useShell();
+  const { dockVisible, setDockVisible, openBuffers, activeTab, openFile, closeBuffer, activateBuffer } = useShell();
   const btn = "p-1.5 hover:text-[var(--fg)] shrink-0";
   return (
     <div className="flex items-center gap-0.5 pl-1 pr-2 py-[3px] border-b text-[12px] shrink-0 min-w-0" style={{ borderColor: "var(--border)" }} aria-label="buffer tabs">
@@ -89,20 +89,20 @@ function TabNav({ explorerRef, small, drawerOpen, onToggleDrawer }: {
       <span className="w-px h-5 mx-1 shrink-0" style={{ background: "var(--border)" }} aria-hidden />
       {openBuffers.length > 0 && (
       <div className="flex items-center overflow-x-auto shrink min-w-0" role="tablist" aria-label="buffers">
-      {openBuffers.map((b) => {
-        const active = b === activeBuffer;
+      {openBuffers.map((t) => {
+        const b = t.path;
+        const active = t.id === activeTab;
         const name = b === HOME ? "home" : b.split("/").pop() ?? b;
-        const node = findNode(b);
         return (
           <div
-            key={b} role="tab" aria-selected={active}
+            key={t.id} role="tab" aria-selected={active}
             ref={active ? (el) => { try { el?.scrollIntoView({ block: "nearest", inline: "nearest" }); } catch { /* noop */ } } : undefined}
-            onClick={() => { if (b === HOME) useShell.getState().openHomeTab(); else if (node) openFile(b, node.kind); }}
+            onClick={() => activateBuffer(t.id)}
             onMouseDown={(e) => {
               if (e.button === 1) {
                 e.preventDefault();
                 sound.fileClose();
-                closeBuffer(b);
+                closeBuffer(t.id);
               }
             }}
             className="flex items-center gap-1.5 px-3 py-[7px] text-[12px] whitespace-nowrap cursor-pointer border-r"
@@ -115,13 +115,18 @@ function TabNav({ explorerRef, small, drawerOpen, onToggleDrawer }: {
           >
             <span>{name}</span>
             <button aria-label={`close ${name}`} className="hover:text-[var(--err)] px-0.5"
-              onClick={(e) => { e.stopPropagation(); sound.fileClose(); closeBuffer(b); }}>✕</button>
+              onClick={(e) => { e.stopPropagation(); sound.fileClose(); closeBuffer(t.id); }}>✕</button>
           </div>
         );
       })}
       </div>
       )}
       <span className="flex-1" />
+      <button className={btn} title="new tab" aria-label="new tab"
+        onClick={() => { useShell.getState().openHomeTab(); sound.select(); }}
+        style={{ color: "var(--fg-dim)" }}>
+        <Plus size={14} />
+      </button>
       <button className={btn} title="toggle utility dock" aria-label="toggle utility dock" aria-pressed={dockVisible}
         onClick={() => { setDockVisible(!dockVisible); sound.toggle(); }}
         style={{ color: dockVisible ? "var(--accent-soft)" : "var(--fg-dim)" }}>
@@ -151,7 +156,7 @@ function TreeRow({ node, depth }: { node: VNode; depth: number }) {
     return (
       <div ref={itemRef}>
         <button
-          onClick={() => { sound.fileOpen(); openFile(node.path, node.kind); }}
+          onClick={() => { sound.fileOpen(); openFile(node.path, node.kind, { inPlace: true }); }}
           className="w-full text-left truncate py-[4px] pr-2 text-[12px]"
           style={{ paddingLeft: 10 + depth * 12, background: isActive ? "var(--sel-bg)" : "transparent", color: isActive ? "var(--accent-soft)" : "var(--fg-dim)" }}
         >
@@ -232,10 +237,11 @@ function Browser() {
       // phone: a file tap OPENS + reveals (drawer auto-closes via
       // activeBuffer). dir taps navigate. no select-then-wonder state.
       sound.fileOpen();
-      openFile(n.path, n.kind);
+      openFile(n.path, n.kind, { inPlace: true });
     } else {
-      sound.select();
-      setSelected(n.path);
+      // desktop: single click opens the file in the current tab.
+      sound.fileOpen();
+      openFile(n.path, n.kind, { inPlace: true });
     }
   };
   const activate = (n: VNode) => {

@@ -260,6 +260,10 @@ export function Pet({ anchor }: { anchor: "desktop" | "status" }) {
   const locRef = useRef("");
   const retryRef = useRef<number | null>(null);
   const lastHomeTour = useRef(0);
+  const leftHomeRef = useRef(false);
+  // left-home latch: closing the last tab returns to the EXACT entry key
+  // (app|1|null|HOME), which locRef already holds — so the key-dedupe below
+  // would eat the return. the latch remembers we were away since.
   useEffect(() => {
     if (!petOn) return;
     const onSay = (e: Event) => {
@@ -272,7 +276,6 @@ export function Pet({ anchor }: { anchor: "desktop" | "status" }) {
     window.addEventListener("pry-say", onSay);
     const unsub = useShell.subscribe((s) => {
       const key = `${s.phase}|${s.desktopWs}|${s.activeBuffer}|${s.cwd}`;
-      if (key === locRef.current) return;
       // don't consume deep-links (?open=) set before entry: only track
       // locations observed inside the app, so entering with a deep link
       // still greets the thing once the workstation is up.
@@ -281,19 +284,26 @@ export function Pet({ anchor }: { anchor: "desktop" | "status" }) {
       // (covers fresh visitors behind the welcome overlay, where the entry
       // timer already ran during boot). consumes the key.
       if (!arrivedRef.current) { locRef.current = key; arrive(); return; }
+      const onHome = s.cwd === HOME && !s.homeFiles && s.desktopWs === 1
+        && (s.mainView === "browser" || s.activeBuffer === HOME);
+      if (!onHome) leftHomeRef.current = true;
       // homecoming: landed back on the dashboard after the arrival tour →
       // a short (2.8s) tour pointer. consumes the key (home has no
       // open-line of its own on ws1). 25s floor so rapid tab flicker
-      // doesn't spam.
-      if (s.cwd === HOME && !s.homeFiles && s.mainView === "browser" && s.desktopWs === 1
+      // doesn't spam. the left-home latch exempts returns whose key still
+      // matches locRef (last-tab close restores the exact entry key).
+      if (onHome
         && arrivedRef.current && s.petMode === "idle" && actRef.current === "none"
+        && (key !== locRef.current || leftHomeRef.current)
         && Date.now() - lastHomeTour.current > 25000) {
         lastHomeTour.current = Date.now();
         lastChatter.current = Date.now();
         locRef.current = key;
+        leftHomeRef.current = false;
         say(prySay("tour"), 2800);
         return;
       }
+      if (key === locRef.current) return;
       const line = openLineFor(s.activeBuffer ?? s.cwd ?? "", s.desktopWs);
       if (!line) { locRef.current = key; return; }
       // eligible → speak + consume. asleep/busy → DON'T consume: retry

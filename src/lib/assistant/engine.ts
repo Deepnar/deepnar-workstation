@@ -331,9 +331,9 @@ export function answer(rawInput: string, ctx: AgentCtx): AgentAnswer {
     case "resume":
       return {
         intent, entity, smalltalk: false,
-        body: ["no single CV file here — the record lives in ~/about instead:", "background + education: ~/about/README.md · competitions, orgs, every certificate with evidence: ~/about/notable.md."],
-        sources: [`${HOME}/about/notable.md`],
-        actions: [{ label: "open notable", run: "open notable" }, { label: "about", run: "open about" }],
+        body: ["the CV is at ~/about/resume.pdf — plus the full record around it:", "background + education: ~/about/README.md · competitions, orgs, every certificate with evidence: ~/about/notable.md."],
+        sources: [`${HOME}/about/resume.pdf`, `${HOME}/about/notable.md`],
+        actions: [{ label: "open resume", run: "open resume" }, { label: "open notable", run: "open notable" }, { label: "about", run: "open about" }],
         trace,
       };
     case "theme":
@@ -435,9 +435,9 @@ export function answer(rawInput: string, ctx: AgentCtx): AgentAnswer {
       if (entity === "resume" || /resume|cv/.test(r))
         return {
           intent: "resume", entity: "resume", smalltalk: false,
-          body: ["the CV file is gone — background + evidence now live in ~/about:", "every certificate opens from ~/about/evidence with its own download button."],
-          sources: [`${HOME}/about/notable.md`],
-          actions: [{ label: "open notable", run: "open notable" }],
+          body: ["the CV opens at ~/about/resume.pdf — with its own download button."],
+          sources: [`${HOME}/about/resume.pdf`],
+          actions: [{ label: "open resume", run: "open resume" }],
           trace,
         };
       return small([`download what? certificates live under ~/about/evidence — say which one (dipex, EGD sheets, course certs).`], [{ label: "notable", run: "open notable" }]);

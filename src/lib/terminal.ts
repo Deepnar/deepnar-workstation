@@ -107,9 +107,9 @@ export function execCommand(raw: string, cwd: string): { lines: TermLine[]; cwd:
     case "open": {
       if (!arg) return bad(`usage: ${cmd} <path>`);
       if (arg === "resume.pdf" || arg.endsWith("resume.pdf")) {
-        s.navTo(`${HOME}/about`);
+        s.openFile(`${HOME}/about/resume.pdf`, "pdf");
         sound.nav();
-        return ok([out("no CV file — the record lives in ~/about (README + notable.md + evidence/)")]);
+        return ok([out("resume opened — ~/about/resume.pdf.")]);
       }
       const target = resolvePath(cwd, arg);
       const node = findNode(target);
@@ -148,9 +148,10 @@ export function execCommand(raw: string, cwd: string): { lines: TermLine[]; cwd:
       if (!arg) return bad("usage: :e <path>");
       return execCommand(`open ${arg}`, cwd);
     case ":bd": {
+      const id = s.activeTab;
       const active = s.activeBuffer;
-      if (!active) return bad("no buffers open");
-      s.closeBuffer(active);
+      if (!id || !active) return bad("no buffers open");
+      s.closeBuffer(id);
       sound.fileClose();
       return ok([out(`closed ${shortPath(active)}`)]);
     }
@@ -207,8 +208,8 @@ export function execCommand(raw: string, cwd: string): { lines: TermLine[]; cwd:
     case "theme":
       return ok([out("light only — the workstation retired dark mode.", "dim")]);
     case "resume":
-      s.navTo(`${HOME}/about`);
-      return ok([out("no CV file — the record lives in ~/about (README + notable.md + evidence/)")]);
+      s.openFile(`${HOME}/about/resume.pdf`, "pdf");
+      return ok([out("resume opened — ~/about/resume.pdf.")]);
     case "contact":
       s.toggle("contactOpen");
       return ok([out("contact panel opened.")]);
@@ -239,7 +240,7 @@ export function execCommand(raw: string, cwd: string): { lines: TermLine[]; cwd:
       return ok([]);
     case "download":
       if (arg.includes("resume") || arg === "") {
-        return bad("no CV file. evidence lives per-item under ~/about/evidence — `ls ~/about/evidence`.");
+        return bad("usage: download <path> — the CV is at ~/about/resume.pdf.");
       }
       return bad("usage: download <path> — try a file under ~/about/evidence");
     case "history":

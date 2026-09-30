@@ -224,6 +224,7 @@ const aboutDir: VNode = dir(`${HOME}/about`, "about", [
     { searchTerms: "about deepesh sonar who background education" }),
   md(`${HOME}/about/notable.md`, "notable.md", "notable — competitions, orgs, credentials", notableBody,
     { searchTerms: "notable achievements competitions SIH DIPEX hackathon certificates experience internship membership" }),
+  { path: `${HOME}/about/resume.pdf`, name: "resume.pdf", kind: "pdf", title: "Deepesh Sonar — resume", link: "/about/resume.pdf", body: ["Two-page master resume — research, systems, OSS, leadership.", "open to view · download to save."] },
   dir(`${HOME}/about/evidence`, "evidence", [
     dir(`${HOME}/about/evidence/dipex`, "dipex", [
       { path: `${HOME}/about/evidence/dipex/regional.pdf`, name: "regional.pdf", kind: "pdf", title: "DIPEX 2026 MMR regional certificate", link: "/evidence/dipex/regional-mmr.pdf", body: ["DIPEX 2026 MMR regional (idea presentation, 11 feb 2026, APSIT thane).", "open to view · download to save."] },

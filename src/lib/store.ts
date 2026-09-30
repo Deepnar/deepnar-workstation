@@ -57,9 +57,10 @@ interface ShellState {
   navIndex: number;
   selected: string | null;
   preview: string | null;
-  // buffers
-  openBuffers: string[];
+  // buffers (id-keyed tabs; several tabs may show the same path)
+  openBuffers: BufTab[];
   activeBuffer: string | null;
+  activeTab: string | null;
   mainView: "browser" | "buffer";
   recent: string[];
   // explorer + sizes
@@ -98,12 +99,14 @@ interface ShellState {
   navFwd: () => void;
   setSelected: (p: string | null) => void;
   setPreview: (p: string | null) => void;
-  openFile: (path: string, kind: string) => void;
+  openFile: (path: string, kind: string, opts?: { inPlace?: boolean }) => void;
   openHomeTab: () => void;
+  goHome: () => void;
+  activateBuffer: (id: string) => void;
   cycleBuffer: (dir: 1 | -1) => void;
   homeFiles: boolean;
   setHomeFiles: (v: boolean) => void;
-  closeBuffer: (path: string) => void;
+  closeBuffer: (id: string) => void;
   setMainView: (v: "browser" | "buffer") => void;
   focusList: () => void;
   setDockVisible: (v: boolean) => void;
@@ -164,6 +167,59 @@ const num = (k: string, fb: number) => {
   }
 };
 
+// buffer tabs: id-keyed so the same location can sit in several tabs
+// (alt+t / + always mint a fresh tab, never steal an existing one).
+export interface BufTab { id: string; path: string }
+let tabSeq = 0;
+const newTab = (path: string): BufTab => ({ id: `t${++tabSeq}`, path });
+
+// view sync for landing on / activating a tab (no merging, no history).
+function tabView(path: string) {
+  if (path === HOME)
+    return { activeBuffer: HOME, mainView: "buffer" as const, cwd: HOME, homeFiles: false, selected: null, preview: null };
+  const n = findNode(path);
+  if (n && n.kind === "dir")
+    return { activeBuffer: path, mainView: "browser" as const, cwd: path, selected: null, preview: null };
+  return { activeBuffer: path, mainView: "buffer" as const, cwd: parentOf(path), selected: path, preview: path };
+}
+
+function activateTab(s: ShellState, id: string) {
+  const t = s.openBuffers.find((t) => t.id === id);
+  if (!t) return {};
+  return { activeTab: id, ...tabView(t.path) };
+}
+
+// folder-tab sync: every directory arrival lands on a tab for that dir.
+// existing tab → activate; active tab dir-like (dir or HOME) → retitle in
+// place (same-tab folder nav); active file → new tab (the file is kept).
+function dirTab(s: ShellState, path: string) {
+  // HOME is dual-rendered (home tab = HomeView, browser = ~ listing):
+  // navigate UP/in-tab from a dir-like tab → retitle in place so the ~
+  // listing shows; arrive from a file → land on the HomeView tab.
+  if (path === HOME) {
+    const at = s.openBuffers.find((t) => t.id === s.activeTab);
+    const an = at && at.path !== HOME ? findNode(at.path) : null;
+    if (at && (at.path === HOME || !an || an.kind === "dir")) {
+      const bufs = s.openBuffers.map((t) => (t.id === at.id ? { ...t, path } : t));
+      return { openBuffers: bufs, activeTab: at.id, activeBuffer: path };
+    }
+    const hit = s.openBuffers.find((t) => t.path === path);
+    if (hit) return { activeTab: hit.id, ...tabView(path) };
+    const t = newTab(path);
+    return { openBuffers: [...s.openBuffers, t].slice(-12), activeTab: t.id, activeBuffer: path };
+  }
+  const hit = s.openBuffers.find((t) => t.path === path);
+  if (hit) return { activeTab: hit.id, ...tabView(path) };
+  const at = s.openBuffers.find((t) => t.id === s.activeTab);
+  const an = at && at.path !== HOME ? findNode(at.path) : null;
+  if (at && (at.path === HOME || !an || an.kind === "dir")) {
+    const bufs = s.openBuffers.map((t) => (t.id === at.id ? { ...t, path } : t));
+    return { openBuffers: bufs, activeTab: at.id, activeBuffer: path };
+  }
+  const t = newTab(path);
+  return { openBuffers: [...s.openBuffers, t].slice(-12), activeTab: t.id, activeBuffer: path };
+}
+
 const parentOf = (p: string) => {
   if (p === HOME) return HOME;
   const i = p.lastIndexOf("/");
@@ -189,9 +245,10 @@ export const useShell = create<ShellState>((set) => ({
   navIndex: 0,
   selected: null,
   preview: null,
-  openBuffers: [],
-  activeBuffer: null,
-  mainView: "browser",
+  openBuffers: [{ id: "home", path: HOME }],
+  activeBuffer: HOME,
+  activeTab: "home",
+  mainView: "buffer",
   homeFiles: false,
   recent: [],
   expanded: [HOME],
@@ -227,6 +284,7 @@ export const useShell = create<ShellState>((set) => ({
       return {
         cwd: path, navHistory: hist.slice(-50), navIndex: Math.min(s.navIndex + 1, 49),
         selected: null, preview: null, mainView: "browser", homeFiles: false,
+        ...dirTab(s, path),
       };
     }),
   // up one level — stepping out of a top-level section lands on the ~
@@ -246,70 +304,112 @@ export const useShell = create<ShellState>((set) => ({
       if (path === s.cwd) return { mainView: "browser" as const };
       const hist = [...s.navHistory];
       hist[s.navIndex] = path;
-      return { cwd: path, navHistory: hist, selected: null, preview: null, mainView: "browser" as const };
+      return { cwd: path, navHistory: hist, selected: null, preview: null, mainView: "browser" as const, ...dirTab(s, path) };
     }),
   navBack: () =>
     set((s) => {
       if (s.navIndex <= 0) return {};
       const path = s.navHistory[s.navIndex - 1];
-      return { navIndex: s.navIndex - 1, cwd: path, selected: null, preview: null, mainView: "browser" };
+      return { navIndex: s.navIndex - 1, cwd: path, selected: null, preview: null, mainView: "browser", ...dirTab(s, path) };
     }),
   navFwd: () =>
     set((s) => {
       if (s.navIndex >= s.navHistory.length - 1) return {};
       const path = s.navHistory[s.navIndex + 1];
-      return { navIndex: s.navIndex + 1, cwd: path, selected: null, preview: null, mainView: "browser" };
+      return { navIndex: s.navIndex + 1, cwd: path, selected: null, preview: null, mainView: "browser", ...dirTab(s, path) };
     }),
   setSelected: (p) => set({ selected: p }),
   setPreview: (p) => set({ preview: p }),
-  openFile: (path, kind) =>
+  openFile: (path, kind, opts) =>
     set((s) => {
       if (kind === "dir") {
-        if (path === s.cwd) return { mainView: "browser" as const };
+        if (path === s.cwd && s.activeBuffer === path) return { mainView: "browser" as const };
         const hist = [...s.navHistory.slice(0, s.navIndex + 1), path];
-        return { cwd: path, navHistory: hist.slice(-50), navIndex: Math.min(s.navIndex + 1, 49), expanded: [...new Set([...s.expanded, ...ancestorsOf(path), path])], mainView: "browser" as const };
+        return { cwd: path, navHistory: hist.slice(-50), navIndex: Math.min(s.navIndex + 1, 49), expanded: [...new Set([...s.expanded, ...ancestorsOf(path), path])], mainView: "browser" as const, selected: null, preview: null, ...dirTab(s, path) };
       }
-      const bufs = s.openBuffers.includes(path) ? s.openBuffers : [...s.openBuffers, path].slice(-12);
+      // in-place (single click in a listing): the file takes over the
+      // current tab instead of minting a new one.
+      if (opts?.inPlace && s.activeTab) {
+        const bufs = s.openBuffers.map((t) => (t.id === s.activeTab ? { ...t, path } : t));
+        const parent = parentOf(path);
+        const hist = [...s.navHistory.slice(0, s.navIndex + 1), parent];
+        return {
+          openBuffers: bufs, activeBuffer: path, mainView: "buffer" as const,
+          recent: [path, ...s.recent.filter((r) => r !== path)].slice(0, 10),
+          cwd: parent, navHistory: hist.slice(-50), navIndex: Math.min(s.navIndex + 1, 49),
+          expanded: [...new Set([...s.expanded, ...ancestorsOf(path)])],
+          selected: path, preview: path,
+        };
+      }
+      const hit = s.openBuffers.find((t) => t.path === path);
+      if (hit) return { activeTab: hit.id, ...tabView(path) };
+      const t = newTab(path);
+      const bufs = [...s.openBuffers, t].slice(-12);
       const parent = parentOf(path);
       const hist = [...s.navHistory.slice(0, s.navIndex + 1), parent];
       return {
-        openBuffers: bufs, activeBuffer: path, mainView: "buffer" as const,
+        openBuffers: bufs, activeTab: t.id, activeBuffer: path, mainView: "buffer" as const,
         recent: [path, ...s.recent.filter((r) => r !== path)].slice(0, 10),
         cwd: parent, navHistory: hist.slice(-50), navIndex: Math.min(s.navIndex + 1, 49),
         expanded: [...new Set([...s.expanded, ...ancestorsOf(path)])],
         selected: path, preview: path,
       };
     }),
-  closeBuffer: (path) =>
+  closeBuffer: (id) =>
     set((s) => {
-      const bufs = s.openBuffers.filter((b) => b !== path);
-      const i = s.openBuffers.indexOf(path);
-      const next = s.activeBuffer === path ? (bufs[Math.min(i, bufs.length - 1)] ?? null) : s.activeBuffer;
-      // last tab closed → fresh start: home, clean history, browser view.
-      if (bufs.length === 0)
-        return { openBuffers: bufs, activeBuffer: null, mainView: "browser" as const, cwd: HOME, navHistory: [HOME], navIndex: 0, selected: null, preview: null };
-      return { openBuffers: bufs, activeBuffer: next, mainView: next ? s.mainView : ("browser" as const) };
+      const i = s.openBuffers.findIndex((t) => t.id === id);
+      if (i < 0) return {};
+      const bufs = s.openBuffers.filter((t) => t.id !== id);
+      // last tab closed → fresh start: a single home tab, never zero tabs.
+      if (bufs.length === 0) {
+        const t = newTab(HOME);
+        return { openBuffers: [t], activeTab: t.id, activeBuffer: HOME, mainView: "buffer" as const, cwd: HOME, navHistory: [HOME], navIndex: 0, selected: null, preview: null, homeFiles: false };
+      }
+      // closing a background tab leaves the active one (and cwd) alone.
+      if (s.activeTab !== id) return { openBuffers: bufs };
+      const next = bufs[Math.min(i, bufs.length - 1)];
+      return { openBuffers: bufs, activeTab: next.id, ...tabView(next.path) };
     }),
   openHomeTab: () =>
-    set((s) => ({
-      openBuffers: s.openBuffers.includes(HOME) ? s.openBuffers : [...s.openBuffers, HOME].slice(-12),
-      activeBuffer: HOME,
-      mainView: "buffer" as const,
-      cwd: HOME,
-      homeFiles: false,
-      selected: null,
-      preview: null,
-      recent: [HOME, ...s.recent.filter((r) => r !== HOME)].slice(0, 10),
-    })),
-  cycleBuffer: (dir) => {
-    const s = useShell.getState();
-    if (s.openBuffers.length < 2) return;
-    const i = Math.max(0, s.openBuffers.indexOf(s.activeBuffer ?? ""));
-    const next = s.openBuffers[(i + dir + s.openBuffers.length) % s.openBuffers.length];
-    if (next === HOME) { s.openHomeTab(); return; }
-    const n = findNode(next);
-    if (n) s.openFile(next, n.kind);
-  },
+    // always mints a FRESH home tab (alt+t / + never steal an existing one).
+    set((s) => {
+      const t = newTab(HOME);
+      return {
+        openBuffers: [...s.openBuffers, t].slice(-12),
+        activeTab: t.id,
+        activeBuffer: HOME,
+        mainView: "buffer" as const,
+        cwd: HOME,
+        homeFiles: false,
+        selected: null,
+        preview: null,
+        recent: [HOME, ...s.recent.filter((r) => r !== HOME)].slice(0, 10),
+      };
+    }),
+  activateBuffer: (id) =>
+    set((s) => activateTab(s, id)),
+  goHome: () =>
+    // the home button always lands on the HomeView (never the ~ listing):
+    // existing home tab → activate; else take over the active tab / mint one.
+    set((s) => {
+      const hit = s.openBuffers.find((t) => t.path === HOME);
+      if (hit) return { activeTab: hit.id, ...tabView(HOME) };
+      const at = s.openBuffers.find((t) => t.id === s.activeTab);
+      const an = at && at.path !== HOME ? findNode(at.path) : null;
+      if (at && (at.path === HOME || !an || an.kind === "dir")) {
+        const bufs = s.openBuffers.map((t) => (t.id === at.id ? { ...t, path: HOME } : t));
+        return { openBuffers: bufs, activeTab: at.id, ...tabView(HOME) };
+      }
+      const t = newTab(HOME);
+      return { openBuffers: [...s.openBuffers, t].slice(-12), activeTab: t.id, ...tabView(HOME) };
+    }),
+  cycleBuffer: (dir) =>
+    set((s) => {
+      if (s.openBuffers.length < 2) return {};
+      const i = Math.max(0, s.openBuffers.findIndex((t) => t.id === s.activeTab));
+      const next = s.openBuffers[(i + dir + s.openBuffers.length) % s.openBuffers.length];
+      return activateTab(s, next.id);
+    }),
   setHomeFiles: (v) => set({ homeFiles: v }),
   setMainView: (v) => set({ mainView: v }),
   focusList: () => set((s) => ({ listFocusNonce: s.listFocusNonce + 1 })),
