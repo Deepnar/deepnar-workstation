@@ -222,46 +222,6 @@ export function AppWindow() {
   );
 }
 
-/* ── first-visit onboarding ── */
-export function Onboarding() {
-  const { phase } = useShell();
-  const [show, setShow] = useState(false);
-  useEffect(() => {
-    if (phase !== "app") return;
-    try {
-      if (!localStorage.getItem("deepnar-onboard")) setShow(true);
-    } catch {
-      setShow(true);
-    }
-  }, [phase]);
-  if (phase !== "app" || !show) return null;
-  const close = () => {
-    try {
-      localStorage.setItem("deepnar-onboard", "1");
-    } catch {
-      /* private mode */
-    }
-    setShow(false);
-  };
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-6" role="dialog" aria-label="welcome">
-      <div className="absolute inset-0" style={{ background: "rgba(3,4,8,0.6)" }} onClick={close} />
-      <div className="relative border max-w-md w-full p-5 text-[13px]" style={{ background: "var(--surface)", borderColor: "var(--accent)" }}>
-        <div className="font-bold mb-1" style={{ color: "var(--fg)" }}>welcome to deepnar@orien</div>
-        <div className="mb-3" style={{ color: "var(--fg-dim)" }}>an interactive workstation. mouse works everywhere — no vim required.</div>
-        <div className="grid grid-cols-[86px_1fr] gap-y-1.5 mb-4" style={{ color: "var(--fg-dim)" }}>
-          <span style={{ color: "var(--icy)" }}>ctrl+k</span><span>find anything</span>
-          <span style={{ color: "var(--icy)" }}>ctrl+`</span><span>terminal</span>
-          <span style={{ color: "var(--icy)" }}>/</span><span>ask the agent</span>
-          <span style={{ color: "var(--icy)" }}>alt+1·2·3</span><span>desktop spaces</span>
-          <span style={{ color: "var(--icy)" }}>?</span><span>controls</span>
-        </div>
-        <button onClick={close} className="px-4 py-2 text-[13px] border" style={{ borderColor: "var(--accent)", color: "var(--accent-soft)" }}>[ enter workstation ]</button>
-      </div>
-    </div>
-  );
-}
-
 /* root phase router (used by page) */
 export function SystemRoot() {
   const { phase, desktopWs, settings } = useShell();
@@ -306,7 +266,6 @@ export function SystemRoot() {
           </AnimatePresence>
           <WaybarHost />
           <Palette />
-          <Onboarding />
           <Contact />
           <Help />
           <Settings />
@@ -317,35 +276,41 @@ export function SystemRoot() {
   );
 }
 
-/* entry hint: points at the ? icon, teaches the keys, once per session */
+/* entry hint: points at the ? icon, teaches the keys, until dismissed */
+// sequencing: Pry's arrival bubble runs 0 → 6.5s after pry-awake, so this
+// waits ~7.5s for a quiet gap — the two onboarding callouts never compete.
+// explicit dismiss (or opening Help from here) persists `deepnar-keyhint`
+// so repeat visitors aren't tutored forever. the ? control itself stays.
 function LoginHint() {
   const { phase, toggle } = useShell();
-  // every fresh page session gets the hint once — never persisted across
-  // sessions. Sequenced AFTER pry wakes (pry-awake event) so the two
-  // entry beats never fight on the same frame.
   const [ready, setReady] = useState(false);
   const [gone, setGone] = useState(false);
   useEffect(() => {
     if (phase !== "app") return;
+    try {
+      if (localStorage.getItem("deepnar-keyhint")) { setGone(true); return; }
+    } catch { /* private mode: show once per load */ }
     const show = () => {
-      const t = setTimeout(() => setReady(true), 1500);
+      const t = setTimeout(() => {
+        setReady(true);
+        setTimeout(() => setGone(true), 16000);
+      }, 7500);
       return () => clearTimeout(t);
     };
     let cancelShow: (() => void) | undefined;
     const onAwake = () => { cancelShow = show(); };
     window.addEventListener("pry-awake", onAwake, { once: true });
     // fallback: if pry is off or already awake, still show after a beat
-    const fb = setTimeout(() => setReady(true), 6000);
-    const auto = setTimeout(() => setGone(true), 22000);
+    const fb = setTimeout(() => setReady(true), 14000);
     return () => {
       window.removeEventListener("pry-awake", onAwake);
       cancelShow?.();
       clearTimeout(fb);
-      clearTimeout(auto);
     };
   }, [phase]);
   if (phase !== "app" || !ready || gone) return null;
-  const dismiss = () => setGone(true);
+  const persist = () => { try { localStorage.setItem("deepnar-keyhint", "1"); } catch { /* noop */ } };
+  const dismiss = () => { persist(); setGone(true); };
   const rows: [string, string][] = [
     ["ctrl+k", "find anything"],
     ["/", "agent"],

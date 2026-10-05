@@ -249,7 +249,7 @@ export function Pet({ anchor }: { anchor: "desktop" | "status" }) {
       setTimeout(() => { setPos((p) => ({ ...p, y: 0 })); if (actRef.current === "hop") setAct("none"); }, 950);
     }
     lastChatter.current = Date.now();
-    say(prySay("tour"), 6500);
+    say(prySay("tourArrival"), 6500);
     window.dispatchEvent(new Event("pry-awake"));
   };
   const pokeTimes = useRef<number[]>([]);
@@ -259,7 +259,10 @@ export function Pet({ anchor }: { anchor: "desktop" | "status" }) {
   // (signal node clicks). 25s cooldown; silent unless idle + free.
   const locRef = useRef("");
   const retryRef = useRef<number | null>(null);
-  const lastHomeTour = useRef(0);
+  // return tour: fires at most ONCE per page load, on the first return to
+  // Home after the arrival tour. no time floor, no repeats — after this one
+  // beat Pry goes back to ordinary autonomous dialogue.
+  const homeTourDoneRef = useRef(false);
   const leftHomeRef = useRef(false);
   // left-home latch: closing the last tab returns to the EXACT entry key
   // (app|1|null|HOME), which locRef already holds — so the key-dedupe below
@@ -288,19 +291,19 @@ export function Pet({ anchor }: { anchor: "desktop" | "status" }) {
         && (s.mainView === "browser" || s.activeBuffer === HOME);
       if (!onHome) leftHomeRef.current = true;
       // homecoming: landed back on the dashboard after the arrival tour →
-      // a short (2.8s) tour pointer. consumes the key (home has no
-      // open-line of its own on ws1). 25s floor so rapid tab flicker
-      // doesn't spam. the left-home latch exempts returns whose key still
-      // matches locRef (last-tab close restores the exact entry key).
+      // one short (2.8s) return-tour pointer, once per page load. consumes
+      // the key (home has no open-line of its own on ws1). the left-home
+      // latch exempts returns whose key still matches locRef (last-tab
+      // close restores the exact entry key).
       if (onHome
-        && arrivedRef.current && s.petMode === "idle" && actRef.current === "none"
-        && (key !== locRef.current || leftHomeRef.current)
-        && Date.now() - lastHomeTour.current > 25000) {
-        lastHomeTour.current = Date.now();
+        && arrivedRef.current && !homeTourDoneRef.current
+        && s.petMode === "idle" && actRef.current === "none"
+        && (key !== locRef.current || leftHomeRef.current)) {
+        homeTourDoneRef.current = true;
         lastChatter.current = Date.now();
         locRef.current = key;
         leftHomeRef.current = false;
-        say(prySay("tour"), 2800);
+        say(prySay("tourReturn"), 2800);
         return;
       }
       if (key === locRef.current) return;
@@ -747,6 +750,7 @@ export function Pet({ anchor }: { anchor: "desktop" | "status" }) {
       {quip && (
         <div className="absolute -top-7 left-1/2 -translate-x-1/2 whitespace-nowrap px-2 py-[3px] text-[12px] border"
           style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--fg)" }}
+          data-pry="bubble"
           aria-live="polite">
           {quip}
           <span className="absolute left-1/2 -translate-x-1/2 -bottom-[5px] w-2 h-2 rotate-45 border-r border-b"

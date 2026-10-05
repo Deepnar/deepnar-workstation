@@ -13,8 +13,7 @@ await page.addInitScript(() => {
   try {
     localStorage.setItem("deepnar-theme", "dark");
     localStorage.setItem("deepnar-seen", "1");
-    localStorage.setItem("deepnar-onboard", "1");
-    localStorage.setItem("deepnar-hint-seen", "1");
+    localStorage.setItem("deepnar-keyhint", "1");
   } catch { /* noop */ }
 });
 page.on("pageerror", (e) => { results.push(`PAGEERROR ${String(e).slice(0, 150)}`); process.exitCode = 1; });
@@ -511,17 +510,17 @@ await page.keyboard.press("l");
 await page.waitForTimeout(500);
 check("35b right enters section", (await page.getByLabel("file navigation").innerText()).includes("about"));
 
-// 35c. login hint teaches keys, dismisses
+// 35c. login hint teaches keys, dismisses (persisted via deepnar-keyhint)
 await page.goto("http://127.0.0.1:3001/", { waitUntil: "domcontentloaded" });
-await page.evaluate(() => { try { localStorage.removeItem("deepnar-hint-seen"); } catch {} });
+await page.evaluate(() => { try { localStorage.removeItem("deepnar-keyhint"); } catch {} });
 await page.reload({ waitUntil: "domcontentloaded" });
-await page.evaluate(() => { try { localStorage.removeItem("deepnar-hint-seen"); } catch {} });
+await page.evaluate(() => { try { localStorage.removeItem("deepnar-keyhint"); } catch {} });
 await page.waitForTimeout(1200);
 await page.getByRole("button", { name: /enter guest session/i }).click();
 await page.waitForTimeout(1800);
-// hint is sequenced after pry wakes (~2.4s) + 1.5s — poll, don't assume timing
+// hint is sequenced ~7.5s after pry-awake (awake ~2.4s) — poll, don't assume timing
 let hintSeen = false;
-for (let i = 0; i < 12 && !hintSeen; i++) {
+for (let i = 0; i < 22 && !hintSeen; i++) {
   hintSeen = await page.getByRole("note", { name: "keyboard hint" }).count().then((n) => n >= 1).catch(() => false);
   if (!hintSeen) await page.waitForTimeout(750);
 }
@@ -529,6 +528,107 @@ check("35c hint popup", hintSeen);
 await page.getByRole("button", { name: /dismiss/ }).click();
 await page.waitForTimeout(300);
 check("35d hint dismisses", await page.getByRole("note", { name: "keyboard hint" }).count() === 0);
+check("35d dismissal persists", await page.evaluate(() => { try { return localStorage.getItem("deepnar-keyhint"); } catch { return null; } }) === "1");
+
+// 35e. fresh-visitor onboarding sequence (cleared first-visit storage.
+// note: every goto/reload re-runs the suite init script, which re-seeds
+// deepnar-keyhint — so remove it again AFTER navigation, like 35c.)
+await page.evaluate(() => { try { localStorage.removeItem("deepnar-hint-views-v2"); localStorage.removeItem("deepnar-keyhint"); } catch {} });
+await page.goto("http://127.0.0.1:3001/", { waitUntil: "domcontentloaded" });
+await page.evaluate(() => { try { localStorage.removeItem("deepnar-keyhint"); } catch {} });
+await page.waitForTimeout(1200);
+await page.getByRole("button", { name: /enter guest session/i }).click();
+await page.waitForTimeout(1500);
+// no second blocking modal after the greeter
+check("35e no second modal", await page.getByRole("dialog", { name: "welcome" }).count() === 0
+  && await page.getByRole("tablist", { name: "buffers" }).getByRole("tab").count() >= 1);
+// home gleam + recruiter row visible
+check("35e home gleam", await page.locator("main").getByText(/new here\?/i).count() >= 1);
+const recruiter = page.getByRole("note", { name: "recruiter status" });
+check("35e recruiter row", await recruiter.count() >= 1
+  && (await recruiter.innerText()).includes("open to research/startup internships"));
+// pry arrival: arrival-pool shape, never a return-only line
+const bubble = page.locator('[data-pry="bubble"]');
+let arrivalText = "";
+for (let i = 0; i < 20 && !arrivalText; i++) {
+  arrivalText = await bubble.innerText().catch(() => "");
+  if (!arrivalText) await page.waitForTimeout(750);
+}
+const arrivalShape = /new here\?|press [parofc?]|^[parofc?] is |^[parof?] |lives under|trust the cat|that's the human|serious stuff|merged stuff|actually replies|try it| type\.|shocking|damage|drill|lore dump|bring coffee|free labor|don't be weird|files fear it|instead of sleeping|where the hint|tour's over/i;
+const returnMarkers = /came back|missed me|back home|welcome back|home again|twice|least useful|sightseeing|efficient|bold strategy|filesystem|quota|still here\?|you returned/i;
+check("35e arrival pool", arrivalShape.test(arrivalText) && !returnMarkers.test(arrivalText));
+// keyboard hint must not overlap the arrival bubble
+let overlapped = false;
+for (let i = 0; i < 4; i++) {
+  const [b, h] = await Promise.all([
+    bubble.count().catch(() => 0),
+    page.getByRole("note", { name: "keyboard hint" }).count().catch(() => 0),
+  ]);
+  if (b >= 1 && h >= 1) overlapped = true;
+  await page.waitForTimeout(1000);
+}
+check("35e no hint overlap", !overlapped);
+// hint arrives after the gap, opens Help
+let lateHint = false;
+for (let i = 0; i < 20 && !lateHint; i++) {
+  lateHint = await page.getByRole("note", { name: "keyboard hint" }).count().then((n) => n >= 1).catch(() => false);
+  if (!lateHint) await page.waitForTimeout(750);
+}
+check("35e late hint", lateHint);
+if (lateHint) {
+  await page.getByRole("note", { name: "keyboard hint" }).getByRole("button", { name: /show all/ }).click();
+  await page.waitForTimeout(400);
+  check("35e hint opens help", await page.getByRole("dialog").count() >= 1);
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+}
+// recruiter links open inside the workstation (no external redirect)
+await page.getByTitle("home").click();
+await page.waitForTimeout(400);
+await recruiter.getByRole("button", { name: /resume/ }).click();
+await page.waitForTimeout(700);
+check("35e resume internal", await page.getByRole("tab", { name: "resume.pdf", selected: true }).count() >= 1);
+await page.getByTitle("home").click();
+await page.waitForTimeout(400);
+await recruiter.getByRole("button", { name: /featured/ }).click();
+await page.waitForTimeout(700);
+check("35e ice internal", (await page.locator("main").innerText()).includes("Infinite Context Engine"));
+// leave + return home: exactly one short return tour, then silence
+await page.getByTitle("home").click();
+await page.waitForTimeout(300);
+await page.keyboard.press("p");
+await page.waitForTimeout(800);
+await page.getByTitle("home").click();
+let returnText = "";
+for (let i = 0; i < 14 && !returnText; i++) {
+  const t = await bubble.innerText().catch(() => "");
+  if (t && t !== arrivalText) returnText = t;
+  await page.waitForTimeout(750);
+}
+check("35e one return tour", returnText !== "" && !/new here\?/i.test(returnText) && returnText !== arrivalText);
+await page.waitForTimeout(3500);
+await page.keyboard.press("p");
+await page.waitForTimeout(800);
+await page.getByTitle("home").click();
+let secondBubble = false;
+for (let i = 0; i < 8; i++) {
+  if (await bubble.count().catch(() => 0) >= 1) secondBubble = true;
+  await page.waitForTimeout(1000);
+}
+check("35e no repeat tour", !secondBubble);
+// mobile: status row wraps without page overflow
+await page.setViewportSize({ width: 390, height: 844 });
+await page.waitForTimeout(600);
+await page.getByTitle("home").click().catch(() => {});
+await page.waitForTimeout(400);
+const mobFit = await page.evaluate(() => {
+  const home = document.querySelector(".home-root");
+  if (!home) return { ok: false, wide: -1 };
+  return { ok: home.scrollWidth <= home.clientWidth + 1, wide: home.scrollWidth - home.clientWidth };
+});
+check("35e mobile no overflow", mobFit.ok && await recruiter.count() >= 1);
+await page.setViewportSize({ width: 1440, height: 900 });
+await page.waitForTimeout(500);
 
 // 36. oss repos pane: left walks out to the parent dir
 await page.getByTitle("home").click();

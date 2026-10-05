@@ -11,7 +11,7 @@ export type PryPool =
   | "internetCulture" | "nonsense" | "food" | "observations" | "interaction"
   | "dragged" | "dropped" | "dizzy" | "annoyed" | "happy" | "achievement"
   | "error" | "terminal" | "agent" | "signal" | "orbit" | "resume" | "goodbye"
-  | "cursorNear" | "cursorCircle" | "tour";
+  | "cursorNear" | "cursorCircle" | "tourArrival" | "tourReturn";
 
 const P: Record<PryPool, string[]> = {
   greetings: [
@@ -40,9 +40,10 @@ const P: Record<PryPool, string[]> = {
     "this could have been an email.", "skill issue.", "sounds like a tomorrow problem.",
     "i require no context.", "huge if true.", "many are saying this.",
   ],
-  // arrival tour: said on EVERY page load (not random) with a hop, so
+  // arrival tour: said ONCE on every page load (with a hop), so
   // first-time visitors get pointed at a section even if they miss the hint.
-  tour: [
+  // navigation/discovery hints only — never a return-home line.
+  tourArrival: [
     "new here? start with projects or about.",
     "new here? press p. projects live there.",
     "i think u should press p for projects.",
@@ -79,6 +80,10 @@ const P: Record<PryPool, string[]> = {
     "home is where the hint is. oh wait.",
     "still here? p. projects. go.",
     "tour's over. p does everything anyway.",
+  ],
+  // return tour: sarcastic/reactive homecoming lines only. fires at most
+  // ONCE per page load, on the first return to Home after leaving it.
+  tourReturn: [
     "you came back. missed me?",
     "back home already? efficient.",
     "lost? p is still projects.",

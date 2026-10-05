@@ -135,6 +135,8 @@ export function Settings() {
         <div className="flex gap-2 mt-3">
           <button onClick={() => { try { localStorage.removeItem("deepnar-seen"); } catch { /* noop */ } notify("boot will replay next visit"); toggle("settingsOpen"); setPhase("boot"); }}
             className="px-3 py-1.5 border text-[12px]" style={{ borderColor: "var(--border)", color: "var(--fg-dim)" }}>replay boot</button>
+          <button onClick={() => { try { localStorage.removeItem("deepnar-hint-views-v2"); localStorage.removeItem("deepnar-keyhint"); } catch { /* noop */ } notify("first-visit hints reset — reloading"); toggle("settingsOpen"); try { location.reload(); } catch { /* noop */ } }}
+            className="px-3 py-1.5 border text-[12px]" style={{ borderColor: "var(--border)", color: "var(--fg-dim)" }}>replay first-visit hints</button>
           <button onClick={() => toggle("settingsOpen")} className="px-3 py-1.5 text-[12px]" style={{ color: "var(--muted)" }}>close</button>
         </div>
       </div>

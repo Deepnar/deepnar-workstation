@@ -15,7 +15,6 @@ async function enter(page) {
   await page.waitForTimeout(1200);
   await page.keyboard.press("Enter");
   await page.waitForTimeout(2200);
-  try { await page.click("[aria-label='welcome'] button", { timeout: 3000 }); await page.waitForTimeout(500); } catch {}
 }
 
 async function wide(page) {
@@ -76,7 +75,7 @@ const browser = await chromium.launch({ executablePath: "/opt/google/chrome/chro
   await page.goto(BASE + "/?orbit-debug", { waitUntil: "networkidle", timeout: 45000 });
   await page.waitForTimeout(1200);
   await page.keyboard.press("Enter"); await page.waitForTimeout(2200);
-  try { await page.click("[aria-label='welcome'] button", { timeout: 3000 }); await page.waitForTimeout(400); } catch {}
+
   await page.keyboard.press("Alt+2");
   await page.waitForTimeout(4500); // countdown 3..2..1
   check("T7 orbit stick + brake visible, no pause", !!(await page.$('[aria-label="thrust stick"]')) && !!(await page.$('[aria-label="brake"]')) && !(await page.$('[aria-label="pause game"]')));
@@ -111,7 +110,7 @@ const browser = await chromium.launch({ executablePath: "/opt/google/chrome/chro
   await page.goto(BASE + "/?signal-debug", { waitUntil: "networkidle", timeout: 45000 });
   await page.waitForTimeout(1200);
   await page.keyboard.press("Enter"); await page.waitForTimeout(2200);
-  try { await page.click("[aria-label='welcome'] button", { timeout: 3000 }); await page.waitForTimeout(400); } catch {}
+
   await page.keyboard.press("Alt+3");
   await page.waitForTimeout(2500);
   const pt = await page.evaluate(() => {

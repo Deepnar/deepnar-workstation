@@ -286,6 +286,15 @@ export function HomeView() {
         </div>
       </div>
       <div className="w-full max-w-2xl mt-3 flex flex-col items-center">
+        <div className="text-[11px] md:text-[12px] font-mono text-center leading-relaxed px-2" style={{ color: "var(--fg-dim)" }} role="note" aria-label="recruiter status">
+          <span style={{ color: "var(--muted)" }}>status:</span> open to research/startup internships
+          <span style={{ color: "var(--muted)" }}> · </span>
+          <button onClick={() => { const n = findNode(`${HOME}/about/resume.pdf`); if (n) { sound.fileOpen(); openFile(n.path, n.kind); } }} className="hover:underline" style={{ color: "var(--accent-soft)" }}>resume ↗</button>
+          <span style={{ color: "var(--muted)" }}> · </span>
+          <button onClick={() => { const n = findNode(`${HOME}/projects/ice/README.md`); if (n) { sound.fileOpen(); openFile(n.path, n.kind); } }} className="hover:underline" style={{ color: "var(--accent-soft)" }}>featured: ICE ↗</button>
+        </div>
+      </div>
+      <div className="w-full max-w-2xl mt-3 flex flex-col items-center">
         <div className="text-[10.5px] uppercase tracking-[0.16em] mb-2" style={{ color: "var(--muted)" }}>
           <a href="https://github.com/Deepnar" target="_blank" rel="noreferrer" className="hover:underline">activity ↗</a>
         </div>
