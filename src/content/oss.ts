@@ -48,7 +48,7 @@ export const prs: PR[] = [
     title: "warn when bridged interpolation uses bad channels",
     repo: "mne-tools/mne-python",
     url: "https://github.com/mne-tools/mne-python/pull/14287",
-    state: "open",
+    state: "merged",
     note: "PR #14287 — warns when bridged interpolation uses bad channels; documentation and regression coverage included.",
   },
   {
