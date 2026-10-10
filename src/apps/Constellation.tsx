@@ -52,6 +52,7 @@ const NODES: GNode[] = [
   { id: "semantic", label: "semantic-router#3288", detail: "merged · Envoy log default, routing overlap", cluster: "oss", domain: "oss", year: 2026.6, size: "normal", open: `${HOME}/oss/merged/semantic-router-3288.md` },
   { id: "modeldock", label: "modeldock#221", detail: "merged #221 + #222 · local model serving", cluster: "oss", domain: "oss", year: 2026.6, size: "normal", open: `${HOME}/oss/merged/modeldock-221.md` },
   { id: "mne", label: "mne#14283", detail: "merged · sklearn-compat fix in EEG tooling", cluster: "oss", domain: "oss", year: 2026.6, size: "normal", open: `${HOME}/oss/merged/mne-python-14283.md` },
+  { id: "mne2", label: "mne#14287", detail: "merged · bad-channel warning for bridged EEG interpolation", cluster: "oss", domain: "oss", year: 2026.77, size: "normal", open: `${HOME}/oss/merged/mne-python-14287.md` },
   { id: "graphiti", label: "graphiti#1772", detail: "open PR · temporal-graph memory ideas", cluster: "oss", domain: "oss", year: 2026.7, size: "minor", open: `${HOME}/oss/open/graphiti-1772.md` },
   { id: "openverif", label: "openverifiable#135", detail: "open PR · tokenizer hash artifacts", cluster: "oss", domain: "oss", year: 2026.7, size: "minor", open: `${HOME}/oss/open/openverifiablellm-135.md` },
   { id: "archi", label: "archi#653", detail: "open PR · model context-window metadata", cluster: "oss", domain: "oss", year: 2026.7, size: "minor", open: `${HOME}/oss/open/archi-653.md` },
@@ -115,6 +116,7 @@ const LINKS: GLink[] = [
   { source: "ice", target: "lsrep", why: "needed a way to evaluate evolving memory" },
   // oss theme overlaps (not derivation claims)
   { source: "router", target: "semantic", why: "routing overlap" },
+  { source: "mne", target: "mne2", why: "same repo · EEG interpolation tooling" },
   { source: "ice", target: "graphiti", why: "temporal-graph memory" },
   { source: "ice", target: "modeldock", why: "local inference serving" },
   { source: "forge", target: "modeldock", why: "local model tooling" },
